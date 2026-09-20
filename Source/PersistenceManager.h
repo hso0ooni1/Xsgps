@@ -25,6 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)recordRecentCoordinate:(CLLocationCoordinate2D)coordinate name:(nullable NSString *)name;
 
 - (BOOL)setSpoofCoordinate:(CLLocationCoordinate2D)coordinate enabled:(BOOL)enabled;
+- (BOOL)setTransientSpoofCoordinate:(CLLocationCoordinate2D)coordinate enabled:(BOOL)enabled;
 - (void)clearSpoof;
 - (void)clearLastSpoof;
 

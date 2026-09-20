@@ -4,8 +4,10 @@
 #import "LocationSpoofer.h"
 #import "LSActivationManager.h"
 #import "OverlayWindow.h"
+#import "LSSmoothRandomMovementManager.h"
 
 #import <MapKit/MapKit.h>
+#import <math.h>
 
 @interface MapPickerViewController () <MKMapViewDelegate, UISearchBarDelegate, CLLocationManagerDelegate>
 @property (nonatomic, strong) UIView *panel;
@@ -27,7 +29,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:0.58];
+    self.view.backgroundColor = UIColor.clearColor;
     self.selectedCoordinate = [PersistenceManager shared].hasStoredCoordinate ? [PersistenceManager shared].spoofCoordinate : CLLocationCoordinate2DMake(24.7136, 46.6753);
     self.selectedName = @"الموقع المختار";
     [self buildInterface];
@@ -59,9 +61,9 @@
     button.translatesAutoresizingMaskIntoConstraints = NO;
     [button setTitle:title forState:UIControlStateNormal];
     [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    button.titleLabel.font = [UIFont systemFontOfSize:15.5 weight:UIFontWeightBold];
+    button.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightBold];
     button.backgroundColor = color;
-    button.layer.cornerRadius = 13.0;
+    button.layer.cornerRadius = 11.0;
     button.layer.cornerCurve = kCACornerCurveContinuous;
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     return button;
@@ -83,7 +85,7 @@
     UILabel *label = [[UILabel alloc] init];
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = title;
-    label.font = [UIFont systemFontOfSize:16.5 weight:UIFontWeightBold];
+    label.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightBold];
     label.textColor = UIColor.whiteColor;
     label.textAlignment = NSTextAlignmentRight;
     [row addSubview:label];
@@ -92,11 +94,11 @@
     [row addSubview:accessory];
 
     [NSLayoutConstraint activateConstraints:@[
-        [row.heightAnchor constraintEqualToConstant:57.0],
-        [icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:16.0],
+        [row.heightAnchor constraintEqualToConstant:48.0],
+        [icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:14.0],
         [icon.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
-        [icon.widthAnchor constraintEqualToConstant:25.0],
-        [icon.heightAnchor constraintEqualToConstant:25.0],
+        [icon.widthAnchor constraintEqualToConstant:22.0],
+        [icon.heightAnchor constraintEqualToConstant:22.0],
         [accessory.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14.0],
         [accessory.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
         [label.trailingAnchor constraintEqualToAnchor:accessory.leadingAnchor constant:-12.0],
@@ -114,6 +116,11 @@
     self.panel.layer.cornerCurve = kCACornerCurveContinuous;
     self.panel.layer.borderWidth = 1.0 / UIScreen.mainScreen.scale;
     self.panel.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.10].CGColor;
+    self.panel.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.panel.layer.shadowOpacity = 0.40;
+    self.panel.layer.shadowRadius = 24.0;
+    self.panel.layer.shadowOffset = CGSizeMake(0.0, 10.0);
+    self.panel.layer.masksToBounds = NO;
     [self.view addSubview:self.panel];
 
     UIView *grabber = [[UIView alloc] init];
@@ -137,13 +144,13 @@
     UILabel *brand = [[UILabel alloc] init];
     brand.translatesAutoresizingMaskIntoConstraints = NO;
     brand.text = @"XsGpS";
-    brand.font = [UIFont systemFontOfSize:25 weight:UIFontWeightBlack];
+    brand.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBlack];
     brand.textColor = UIColor.whiteColor;
     [header addSubview:brand];
 
     self.statusLabel = [[UILabel alloc] init];
     self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.statusLabel.font = [UIFont systemFontOfSize:13.5 weight:UIFontWeightBold];
+    self.statusLabel.font = [UIFont systemFontOfSize:12.0 weight:UIFontWeightBold];
     self.statusLabel.textAlignment = NSTextAlignmentCenter;
     self.statusLabel.layer.cornerRadius = 14.0;
     self.statusLabel.layer.cornerCurve = kCACornerCurveContinuous;
@@ -174,8 +181,7 @@
 
     UIButton *bookmarks = [self buttonWithTitle:@"المحفوظات  🔖" color:[UIColor colorWithRed:0.34 green:0.20 blue:0.04 alpha:1.0] action:@selector(bookmarksTapped)];
     UIButton *save = [self buttonWithTitle:@"حفظ  ✚" color:[UIColor colorWithRed:0.05 green:0.38 blue:0.16 alpha:1.0] action:@selector(saveTapped)];
-    UIButton *restore = [self buttonWithTitle:@"استعادة  ◉" color:[UIColor colorWithRed:0.46 green:0.08 blue:0.11 alpha:1.0] action:@selector(restoreTapped)];
-    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[bookmarks, save, restore]];
+    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[bookmarks, save]];
     buttons.translatesAutoresizingMaskIntoConstraints = NO;
     buttons.axis = UILayoutConstraintAxisHorizontal;
     buttons.spacing = 9.0;
@@ -240,46 +246,46 @@
     [NSLayoutConstraint activateConstraints:@[
         [self.panel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:18.0],
         [self.panel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-18.0],
-        [self.panel.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8.0],
+        [self.panel.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:14.0],
         [self.panel.bottomAnchor constraintLessThanOrEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-10.0],
 
-        [grabber.topAnchor constraintEqualToAnchor:self.panel.topAnchor constant:8.0],
+        [grabber.topAnchor constraintEqualToAnchor:self.panel.topAnchor constant:7.0],
         [grabber.centerXAnchor constraintEqualToAnchor:self.panel.centerXAnchor],
-        [grabber.widthAnchor constraintEqualToConstant:52.0],
-        [grabber.heightAnchor constraintEqualToConstant:5.0],
+        [grabber.widthAnchor constraintEqualToConstant:44.0],
+        [grabber.heightAnchor constraintEqualToConstant:4.0],
 
-        [header.topAnchor constraintEqualToAnchor:grabber.bottomAnchor constant:14.0],
+        [header.topAnchor constraintEqualToAnchor:grabber.bottomAnchor constant:9.0],
         [header.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
         [header.trailingAnchor constraintEqualToAnchor:self.panel.trailingAnchor constant:-14.0],
-        [header.heightAnchor constraintEqualToConstant:64.0],
+        [header.heightAnchor constraintEqualToConstant:54.0],
 
         [logo.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:17.0],
         [logo.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
-        [logo.widthAnchor constraintEqualToConstant:32.0],
-        [logo.heightAnchor constraintEqualToConstant:36.0],
+        [logo.widthAnchor constraintEqualToConstant:27.0],
+        [logo.heightAnchor constraintEqualToConstant:30.0],
         [brand.leadingAnchor constraintEqualToAnchor:logo.trailingAnchor constant:10.0],
         [brand.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
 
         [close.trailingAnchor constraintEqualToAnchor:header.trailingAnchor constant:-12.0],
         [close.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
-        [close.widthAnchor constraintEqualToConstant:38.0],
-        [close.heightAnchor constraintEqualToConstant:38.0],
+        [close.widthAnchor constraintEqualToConstant:34.0],
+        [close.heightAnchor constraintEqualToConstant:34.0],
 
         [self.statusLabel.trailingAnchor constraintEqualToAnchor:close.leadingAnchor constant:-10.0],
         [self.statusLabel.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
-        [self.statusLabel.heightAnchor constraintEqualToConstant:32.0],
-        [self.statusLabel.widthAnchor constraintGreaterThanOrEqualToConstant:142.0],
+        [self.statusLabel.heightAnchor constraintEqualToConstant:28.0],
+        [self.statusLabel.widthAnchor constraintGreaterThanOrEqualToConstant:128.0],
         [self.statusLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:brand.trailingAnchor constant:8.0],
 
         [self.searchBar.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:7.0],
         [self.searchBar.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
         [self.searchBar.trailingAnchor constraintEqualToAnchor:self.panel.trailingAnchor constant:-14.0],
-        [self.searchBar.heightAnchor constraintEqualToConstant:52.0],
+        [self.searchBar.heightAnchor constraintEqualToConstant:44.0],
 
         [buttons.topAnchor constraintEqualToAnchor:self.searchBar.bottomAnchor constant:4.0],
         [buttons.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
         [buttons.trailingAnchor constraintEqualToAnchor:self.panel.trailingAnchor constant:-14.0],
-        [buttons.heightAnchor constraintEqualToConstant:52.0],
+        [buttons.heightAnchor constraintEqualToConstant:44.0],
 
         [self.mapView.topAnchor constraintEqualToAnchor:buttons.bottomAnchor constant:9.0],
         [self.mapView.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
@@ -288,12 +294,12 @@
 
         [self.mapTypeControl.topAnchor constraintEqualToAnchor:self.mapView.bottomAnchor constant:8.0],
         [self.mapTypeControl.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
-        [self.mapTypeControl.heightAnchor constraintEqualToConstant:42.0],
+        [self.mapTypeControl.heightAnchor constraintEqualToConstant:36.0],
         [myLocation.topAnchor constraintEqualToAnchor:self.mapView.bottomAnchor constant:8.0],
         [myLocation.leadingAnchor constraintEqualToAnchor:self.mapTypeControl.trailingAnchor constant:10.0],
         [myLocation.trailingAnchor constraintEqualToAnchor:self.panel.trailingAnchor constant:-14.0],
         [myLocation.widthAnchor constraintEqualToAnchor:self.mapTypeControl.widthAnchor multiplier:0.85],
-        [myLocation.heightAnchor constraintEqualToConstant:42.0],
+        [myLocation.heightAnchor constraintEqualToConstant:36.0],
 
         [locationRow.topAnchor constraintEqualToAnchor:self.mapTypeControl.bottomAnchor constant:8.0],
         [locationRow.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
@@ -303,16 +309,16 @@
         [fluctuationRow.leadingAnchor constraintEqualToAnchor:locationRow.leadingAnchor],
         [fluctuationRow.trailingAnchor constraintEqualToAnchor:locationRow.trailingAnchor],
 
-        [self.radiusButton.widthAnchor constraintEqualToConstant:76.0],
-        [self.radiusButton.heightAnchor constraintEqualToConstant:36.0],
+        [self.radiusButton.widthAnchor constraintEqualToConstant:68.0],
+        [self.radiusButton.heightAnchor constraintEqualToConstant:31.0],
 
         [deviceRow.topAnchor constraintEqualToAnchor:fluctuationRow.bottomAnchor constant:8.0],
         [deviceRow.leadingAnchor constraintEqualToAnchor:locationRow.leadingAnchor],
         [deviceRow.trailingAnchor constraintEqualToAnchor:locationRow.trailingAnchor],
-        [deviceRow.bottomAnchor constraintEqualToAnchor:self.panel.bottomAnchor constant:-14.0],
+        [deviceRow.bottomAnchor constraintEqualToAnchor:self.panel.bottomAnchor constant:-11.0],
 
-        [copyDevice.widthAnchor constraintEqualToConstant:68.0],
-        [copyDevice.heightAnchor constraintEqualToConstant:36.0],
+        [copyDevice.widthAnchor constraintEqualToConstant:62.0],
+        [copyDevice.heightAnchor constraintEqualToConstant:31.0],
     ]];
 
     // Allow the map to absorb extra height on taller phones while keeping a compact panel.
@@ -321,9 +327,10 @@
 
 - (void)updateFromPersistence {
     PersistenceManager *store = [PersistenceManager shared];
+    LSSmoothRandomMovementManager *smooth = [LSSmoothRandomMovementManager shared];
     self.locationSwitch.on = store.isSpoofingEnabled;
-    self.fluctuationSwitch.on = store.fluctuationEnabled;
-    NSString *radiusTitle = [NSString stringWithFormat:@"%.0fm", MAX(1.0, store.fluctuationRadius)];
+    self.fluctuationSwitch.on = smooth.isEnabled;
+    NSString *radiusTitle = [NSString stringWithFormat:@"%.0fm", MAX(1.0, smooth.radius)];
     [self.radiusButton setTitle:radiusTitle forState:UIControlStateNormal];
     [self updateStatus];
 }
@@ -353,6 +360,7 @@
     CGPoint point = [gesture locationInView:self.mapView];
     CLLocationCoordinate2D coordinate = [self.mapView convertPoint:point toCoordinateFromView:self.mapView];
     [self movePinToCoordinate:coordinate name:@"الموقع المختار" animated:YES];
+    [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
     if (self.locationSwitch.isOn) {
         [[PersistenceManager shared] setSpoofCoordinate:coordinate enabled:YES];
     } else {
@@ -370,7 +378,9 @@
         double lat = [parts[0] doubleValue];
         double lon = [parts[1] doubleValue];
         if (lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0) {
-            [self movePinToCoordinate:CLLocationCoordinate2DMake(lat, lon) name:query animated:YES];
+            CLLocationCoordinate2D coordinate = CLLocationCoordinate2DMake(lat, lon);
+            [self movePinToCoordinate:coordinate name:query animated:YES];
+            [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
             return;
         }
     }
@@ -387,6 +397,7 @@
         NSString *name = item.name ?: query;
         self.searchBar.text = name;
         [self movePinToCoordinate:item.placemark.coordinate name:name animated:YES];
+        [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:item.placemark.coordinate];
     }];
 }
 
@@ -401,6 +412,7 @@
             [self presentViewController:alert animated:YES completion:nil];
             return;
         }
+        [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:self.selectedCoordinate];
         [store setSpoofCoordinate:self.selectedCoordinate enabled:YES];
     } else {
         [store setSpoofCoordinate:self.selectedCoordinate enabled:NO];
@@ -409,20 +421,21 @@
 }
 
 - (void)fluctuationChanged {
-    [PersistenceManager shared].fluctuationEnabled = self.fluctuationSwitch.isOn;
+    [[LSSmoothRandomMovementManager shared] setEnabled:self.fluctuationSwitch.isOn
+                                      anchorCoordinate:self.selectedCoordinate];
 }
 
 - (void)radiusTapped {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"نطاق الحركة العشوائية" message:@"أدخل نصف القطر بالمتر" preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.keyboardType = UIKeyboardTypeNumberPad;
-        field.text = [NSString stringWithFormat:@"%.0f", [PersistenceManager shared].fluctuationRadius];
+        field.text = [NSString stringWithFormat:@"%.0f", [LSSmoothRandomMovementManager shared].radius];
         field.textAlignment = NSTextAlignmentCenter;
     }];
     __weak typeof(self) weakSelf = self;
     [alert addAction:[UIAlertAction actionWithTitle:@"حفظ" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         double radius = MAX(1.0, MIN(5000.0, alert.textFields.firstObject.text.doubleValue));
-        [PersistenceManager shared].fluctuationRadius = radius;
+        [LSSmoothRandomMovementManager shared].radius = radius;
         [weakSelf.radiusButton setTitle:[NSString stringWithFormat:@"%.0fm", radius] forState:UIControlStateNormal];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
@@ -451,6 +464,7 @@
     for (LSBookmark *bookmark in bookmarks) {
         [alert addAction:[UIAlertAction actionWithTitle:bookmark.name style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
             [weakSelf movePinToCoordinate:bookmark.coordinate name:bookmark.name animated:YES];
+            [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:bookmark.coordinate];
             [[PersistenceManager shared] setSpoofCoordinate:bookmark.coordinate enabled:NO];
             weakSelf.locationSwitch.on = NO;
             [weakSelf updateStatus];
@@ -464,16 +478,6 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)restoreTapped {
-    PersistenceManager *store = [PersistenceManager shared];
-    if (store.hasStoredCoordinate) {
-        [self movePinToCoordinate:store.spoofCoordinate name:@"آخر موقع محفوظ" animated:YES];
-        [store setSpoofCoordinate:store.spoofCoordinate enabled:NO];
-        self.locationSwitch.on = NO;
-        [self updateStatus];
-    }
-}
-
 - (void)mapTypeChanged {
     self.mapView.mapType = self.mapTypeControl.selectedSegmentIndex == 1 ? MKMapTypeSatellite : MKMapTypeStandard;
 }
@@ -484,31 +488,84 @@
     if (!self.locationManager) {
         self.locationManager = [[CLLocationManager alloc] init];
         self.locationManager.delegate = self;
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyBest;
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters;
+        self.locationManager.distanceFilter = kCLDistanceFilterNone;
     }
     CLAuthorizationStatus status;
     if (@available(iOS 14.0, *)) status = self.locationManager.authorizationStatus;
     else status = CLLocationManager.authorizationStatus;
-    if (status == kCLAuthorizationStatusNotDetermined) {
-        [self.locationManager requestWhenInUseAuthorization];
+    if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) {
+        self.fetchingRealLocation = NO;
+        LSSetHooksBypassed(NO);
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"الموقع" message:@"فعّل إذن الموقع للتطبيق ثم جرّب مرة ثانية." preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"حسنًا" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
     }
+    if (status == kCLAuthorizationStatusNotDetermined) { [self.locationManager requestWhenInUseAuthorization]; return; }
+    [self beginFastRealLocationLookup];
+}
+
+- (void)beginFastRealLocationLookup {
+    if (!self.fetchingRealLocation) return;
+    CLLocation *cached = self.locationManager.location;
+    if (cached && cached.horizontalAccuracy >= 0.0 && fabs(cached.timestamp.timeIntervalSinceNow) < 20.0) {
+        [self finishRealLocationLookupWithLocation:cached];
+        return;
+    }
+    [self.locationManager startUpdatingLocation];
     [self.locationManager requestLocation];
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || !self.fetchingRealLocation) return;
+        CLLocation *fallback = self.locationManager.location;
+        if (fallback && fallback.horizontalAccuracy >= 0.0) [self finishRealLocationLookupWithLocation:fallback];
+    });
+}
+
+- (void)finishRealLocationLookupWithLocation:(CLLocation *)location {
+    if (!self.fetchingRealLocation) return;
+    self.fetchingRealLocation = NO;
+    [self.locationManager stopUpdatingLocation];
+    LSSetHooksBypassed(NO);
+    if (!location) return;
+    [self movePinToCoordinate:location.coordinate name:@"موقعي الحقيقي" animated:YES];
+    [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:location.coordinate];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations {
+    (void)manager;
     if (!self.fetchingRealLocation) return;
-    self.fetchingRealLocation = NO;
-    CLLocation *location = locations.lastObject;
-    LSSetHooksBypassed(NO);
-    if (location) {
-        [self movePinToCoordinate:location.coordinate name:@"موقعي الحقيقي" animated:YES];
+    CLLocation *best = nil;
+    for (CLLocation *candidate in [locations reverseObjectEnumerator]) {
+        if (candidate.horizontalAccuracy >= 0.0) { best = candidate; break; }
     }
+    if (best) [self finishRealLocationLookupWithLocation:best];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
-    (void)manager; (void)error;
+    (void)manager;
+    if (!self.fetchingRealLocation) return;
+    if (error.code == kCLErrorLocationUnknown) return;
     self.fetchingRealLocation = NO;
+    [self.locationManager stopUpdatingLocation];
     LSSetHooksBypassed(NO);
+}
+
+- (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
+    if (!self.fetchingRealLocation) return;
+    CLAuthorizationStatus status = manager.authorizationStatus;
+    if (status == kCLAuthorizationStatusAuthorizedWhenInUse || status == kCLAuthorizationStatusAuthorizedAlways) [self beginFastRealLocationLookup];
+    else if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) { self.fetchingRealLocation = NO; LSSetHooksBypassed(NO); }
+}
+
+- (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
+    (void)manager;
+    if (@available(iOS 14.0, *)) return;
+    if (!self.fetchingRealLocation) return;
+    if (status == kCLAuthorizationStatusAuthorizedWhenInUse || status == kCLAuthorizationStatusAuthorizedAlways) [self beginFastRealLocationLookup];
+    else if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) { self.fetchingRealLocation = NO; LSSetHooksBypassed(NO); }
 }
 
 - (void)copyDeviceID {

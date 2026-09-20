@@ -96,7 +96,8 @@ static const NSUInteger kLSMaxRecentLocations = 5;
     self.cachedSimulationWasActive = [self.defaults boolForKey:kKeySimulationWasActive];
     self.cachedAltitude = [self.defaults doubleForKey:kKeyAltitude];
     self.cachedHeading = [self.defaults doubleForKey:kKeyHeading];
-    self.cachedFluctuationEnabled = [self.defaults boolForKey:kKeyFluctuationEnabled];
+    self.cachedFluctuationEnabled = NO;
+    [self.defaults setBool:NO forKey:kKeyFluctuationEnabled];
     self.cachedFluctuationRadius = [self.defaults doubleForKey:kKeyFluctuationRadius];
     self.cachedKeepLastSpoof = [self.defaults boolForKey:kKeyKeepLastSpoof];
     self.cachedShowRealLocation = [self.defaults boolForKey:kKeyShowRealLocation];
@@ -304,6 +305,19 @@ static const NSUInteger kLSMaxRecentLocations = 5;
     [self.defaults setDouble:self.cachedHeading forKey:kKeyHeading];
     [self.defaults setBool:self.cachedFluctuationEnabled forKey:kKeyFluctuationEnabled];
     [self.defaults setDouble:self.cachedFluctuationRadius forKey:kKeyFluctuationRadius];
+    os_unfair_lock_unlock(&_lock);
+    return YES;
+}
+
+- (BOOL)setTransientSpoofCoordinate:(CLLocationCoordinate2D)coordinate enabled:(BOOL)enabled {
+    if (![self isValidLatitude:coordinate.latitude longitude:coordinate.longitude]) {
+        return NO;
+    }
+
+    os_unfair_lock_lock(&_lock);
+    self.cachedCoordinate = coordinate;
+    self.hasCachedCoordinate = YES;
+    self.cachedEnabled = enabled;
     os_unfair_lock_unlock(&_lock);
     return YES;
 }

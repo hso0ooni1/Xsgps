@@ -314,6 +314,7 @@ static UIViewController *LSHostTopViewController(void) {
     if (![[LSActivationManager shared] isActivated]) {
         LSActivationViewController *activation = [[LSActivationViewController alloc] init];
         activation.modalPresentationStyle = UIModalPresentationOverFullScreen;
+        activation.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
         __weak typeof(self) weakSelf = self;
         activation.activationSucceeded = ^{
             __strong typeof(weakSelf) self = weakSelf;
@@ -333,6 +334,7 @@ static UIViewController *LSHostTopViewController(void) {
 
     MapPickerViewController *mapPicker = [[MapPickerViewController alloc] init];
     mapPicker.modalPresentationStyle = UIModalPresentationOverFullScreen;
+    mapPicker.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kLSPresentationWatchdogInterval * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{

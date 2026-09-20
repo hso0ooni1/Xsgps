@@ -11,7 +11,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:0.62];
+    self.view.backgroundColor = UIColor.clearColor;
 
     UIView *card = [[UIView alloc] init];
     card.translatesAutoresizingMaskIntoConstraints = NO;
@@ -20,6 +20,11 @@
     card.layer.cornerCurve = kCACornerCurveContinuous;
     card.layer.borderWidth = 1.0 / UIScreen.mainScreen.scale;
     card.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.10].CGColor;
+    card.layer.shadowColor = UIColor.blackColor.CGColor;
+    card.layer.shadowOpacity = 0.36;
+    card.layer.shadowRadius = 22.0;
+    card.layer.shadowOffset = CGSizeMake(0.0, 10.0);
+    card.layer.masksToBounds = NO;
     [self.view addSubview:card];
 
     UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"location.north.fill"]];
@@ -93,14 +98,14 @@
         [card.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:22.0],
         [card.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-22.0],
         [card.widthAnchor constraintLessThanOrEqualToConstant:430.0],
-        [card.widthAnchor constraintEqualToAnchor:self.view.widthAnchor multiplier:0.90],
+        [card.widthAnchor constraintEqualToAnchor:self.view.widthAnchor multiplier:0.86],
 
-        [close.topAnchor constraintEqualToAnchor:card.topAnchor constant:16.0],
-        [close.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-16.0],
+        [close.topAnchor constraintEqualToAnchor:card.topAnchor constant:13.0],
+        [close.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-13.0],
         [close.widthAnchor constraintEqualToConstant:36.0],
         [close.heightAnchor constraintEqualToConstant:36.0],
 
-        [icon.topAnchor constraintEqualToAnchor:card.topAnchor constant:28.0],
+        [icon.topAnchor constraintEqualToAnchor:card.topAnchor constant:22.0],
         [icon.centerXAnchor constraintEqualToAnchor:card.centerXAnchor constant:-58.0],
         [icon.widthAnchor constraintEqualToConstant:34.0],
         [icon.heightAnchor constraintEqualToConstant:34.0],
@@ -108,24 +113,24 @@
         [title.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
         [title.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:10.0],
 
-        [subtitle.topAnchor constraintEqualToAnchor:icon.bottomAnchor constant:18.0],
+        [subtitle.topAnchor constraintEqualToAnchor:icon.bottomAnchor constant:14.0],
         [subtitle.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:24.0],
         [subtitle.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-24.0],
 
-        [self.codeField.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:22.0],
+        [self.codeField.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:17.0],
         [self.codeField.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:24.0],
         [self.codeField.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-24.0],
-        [self.codeField.heightAnchor constraintEqualToConstant:54.0],
+        [self.codeField.heightAnchor constraintEqualToConstant:48.0],
 
         [self.activateButton.topAnchor constraintEqualToAnchor:self.codeField.bottomAnchor constant:14.0],
         [self.activateButton.leadingAnchor constraintEqualToAnchor:self.codeField.leadingAnchor],
         [self.activateButton.trailingAnchor constraintEqualToAnchor:self.codeField.trailingAnchor],
-        [self.activateButton.heightAnchor constraintEqualToConstant:52.0],
+        [self.activateButton.heightAnchor constraintEqualToConstant:46.0],
 
         [self.messageLabel.topAnchor constraintEqualToAnchor:self.activateButton.bottomAnchor constant:14.0],
         [self.messageLabel.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:24.0],
         [self.messageLabel.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-24.0],
-        [self.messageLabel.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-24.0],
+        [self.messageLabel.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-19.0],
     ]];
 }
 
