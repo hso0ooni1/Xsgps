@@ -9,6 +9,100 @@
 #import <MapKit/MapKit.h>
 #import <math.h>
 
+static NSString *LSNormalizeCoordinateSearchText(NSString *input) {
+    if (input.length == 0) return @"";
+
+    NSMutableString *text = [input mutableCopy];
+    NSArray<NSString *> *arabicDigits = @[@"٠", @"١", @"٢", @"٣", @"٤", @"٥", @"٦", @"٧", @"٨", @"٩"];
+    NSArray<NSString *> *persianDigits = @[@"۰", @"۱", @"۲", @"۳", @"۴", @"۵", @"۶", @"۷", @"۸", @"۹"];
+    for (NSUInteger i = 0; i < 10; i++) {
+        NSString *ascii = [NSString stringWithFormat:@"%lu", (unsigned long)i];
+        [text replaceOccurrencesOfString:arabicDigits[i] withString:ascii options:0 range:NSMakeRange(0, text.length)];
+        [text replaceOccurrencesOfString:persianDigits[i] withString:ascii options:0 range:NSMakeRange(0, text.length)];
+    }
+
+    [text replaceOccurrencesOfString:@"٫" withString:@"." options:0 range:NSMakeRange(0, text.length)];
+    [text replaceOccurrencesOfString:@"−" withString:@"-" options:0 range:NSMakeRange(0, text.length)];
+    [text replaceOccurrencesOfString:@"–" withString:@"-" options:0 range:NSMakeRange(0, text.length)];
+    [text replaceOccurrencesOfString:@"٬" withString:@"" options:0 range:NSMakeRange(0, text.length)];
+    return [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+}
+
+static BOOL LSCoordinateFromPair(double first, double second, CLLocationCoordinate2D *coordinate) {
+    BOOL normal = first >= -90.0 && first <= 90.0 && second >= -180.0 && second <= 180.0;
+    BOOL swapped = first >= -180.0 && first <= 180.0 && second >= -90.0 && second <= 90.0;
+
+    CLLocationDegrees latitude = first;
+    CLLocationDegrees longitude = second;
+
+    // If the first value cannot be latitude but the second can, infer lon/lat automatically.
+    if (!normal && swapped) {
+        latitude = second;
+        longitude = first;
+        normal = YES;
+    }
+
+    if (!normal) return NO;
+    CLLocationCoordinate2D value = CLLocationCoordinate2DMake(latitude, longitude);
+    if (!CLLocationCoordinate2DIsValid(value)) return NO;
+    if (coordinate) *coordinate = value;
+    return YES;
+}
+
+static BOOL LSParseCoordinateSearchQuery(NSString *query, CLLocationCoordinate2D *coordinate) {
+    NSString *normalized = LSNormalizeCoordinateSearchText(query);
+    if (normalized.length == 0) return NO;
+
+    // Google Maps URLs commonly contain /@lat,lon or ?q=lat,lon.
+    if ([normalized rangeOfString:@"maps" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+        [normalized rangeOfString:@"google" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+        NSRegularExpression *urlPair = [NSRegularExpression regularExpressionWithPattern:@"([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*[,،]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))"
+                                                                                 options:0
+                                                                                   error:nil];
+        NSTextCheckingResult *match = [urlPair firstMatchInString:normalized options:0 range:NSMakeRange(0, normalized.length)];
+        if (match.numberOfRanges == 3) {
+            double first = [[normalized substringWithRange:[match rangeAtIndex:1]] doubleValue];
+            double second = [[normalized substringWithRange:[match rangeAtIndex:2]] doubleValue];
+            if (LSCoordinateFromPair(first, second, coordinate)) return YES;
+        }
+    }
+
+    NSMutableString *clean = [[normalized lowercaseString] mutableCopy];
+    NSArray<NSString *> *labels = @[
+        @"latitude", @"longitude", @"lat", @"lng", @"lon",
+        @"خط العرض", @"خط الطول", @"العرض", @"الطول"
+    ];
+    for (NSString *label in labels) {
+        [clean replaceOccurrencesOfString:label withString:@" " options:NSCaseInsensitiveSearch range:NSMakeRange(0, clean.length)];
+    }
+
+    NSArray<NSString *> *separators = @[
+        @",", @"،", @";", @"؛", @"|", @"/",
+        @"(", @")", @"[", @"]", @"{", @"}", @":", @"="
+    ];
+    for (NSString *separator in separators) {
+        [clean replaceOccurrencesOfString:separator withString:@" " options:0 range:NSMakeRange(0, clean.length)];
+    }
+
+    NSArray<NSString *> *rawParts = [clean componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSMutableArray<NSString *> *parts = [NSMutableArray arrayWithCapacity:2];
+    for (NSString *part in rawParts) {
+        if (part.length > 0) [parts addObject:part];
+    }
+    if (parts.count != 2) return NO;
+
+    NSScanner *firstScanner = [NSScanner scannerWithString:parts[0]];
+    NSScanner *secondScanner = [NSScanner scannerWithString:parts[1]];
+    double first = 0.0;
+    double second = 0.0;
+    if (![firstScanner scanDouble:&first] || !firstScanner.isAtEnd ||
+        ![secondScanner scanDouble:&second] || !secondScanner.isAtEnd) {
+        return NO;
+    }
+
+    return LSCoordinateFromPair(first, second, coordinate);
+}
+
 @interface MapPickerViewController () <MKMapViewDelegate, UISearchBarDelegate, CLLocationManagerDelegate>
 @property (nonatomic, strong) UIView *panel;
 @property (nonatomic, strong) UILabel *statusLabel;
@@ -364,31 +458,52 @@
     NSString *query = [searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     if (query.length == 0) return;
 
-    NSArray<NSString *> *parts = [query componentsSeparatedByString:@","];
-    if (parts.count == 2) {
-        double lat = [parts[0] doubleValue];
-        double lon = [parts[1] doubleValue];
-        if (lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0) {
-            CLLocationCoordinate2D coordinate = CLLocationCoordinate2DMake(lat, lon);
-            [self movePinToCoordinate:coordinate name:query animated:YES];
-            [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
-            return;
-        }
+    CLLocationCoordinate2D coordinate = kCLLocationCoordinate2DInvalid;
+    if (LSParseCoordinateSearchQuery(query, &coordinate)) {
+        NSString *coordinateName = [NSString stringWithFormat:@"%.7f, %.7f", coordinate.latitude, coordinate.longitude];
+        self.searchBar.text = coordinateName;
+        [self movePinToCoordinate:coordinate name:coordinateName animated:YES];
+        [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
+        return;
     }
 
+    [self performPlaceSearchForQuery:query preferCurrentRegion:YES];
+}
+
+- (void)performPlaceSearchForQuery:(NSString *)query preferCurrentRegion:(BOOL)preferCurrentRegion {
     MKLocalSearchRequest *request = [[MKLocalSearchRequest alloc] init];
     request.naturalLanguageQuery = query;
-    request.region = self.mapView.region;
+    if (preferCurrentRegion) {
+        request.region = self.mapView.region;
+    }
+
     MKLocalSearch *search = [[MKLocalSearch alloc] initWithRequest:request];
     __weak typeof(self) weakSelf = self;
     [search startWithCompletionHandler:^(MKLocalSearchResponse *response, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+
         MKMapItem *item = response.mapItems.firstObject;
-        if (!self || error || !item) return;
-        NSString *name = item.name ?: query;
-        self.searchBar.text = name;
-        [self movePinToCoordinate:item.placemark.coordinate name:name animated:YES];
-        [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:item.placemark.coordinate];
+        if (!error && item && CLLocationCoordinate2DIsValid(item.placemark.coordinate)) {
+            NSString *name = item.name.length ? item.name : query;
+            self.searchBar.text = name;
+            [self movePinToCoordinate:item.placemark.coordinate name:name animated:YES];
+            [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:item.placemark.coordinate];
+            return;
+        }
+
+        // A map-region hint can be too restrictive for a distant city/place.
+        // Retry once globally before declaring that no place was found.
+        if (preferCurrentRegion) {
+            [self performPlaceSearchForQuery:query preferCurrentRegion:NO];
+            return;
+        }
+
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"لم يتم العثور على الموقع"
+                                                                       message:@"جرّب اسمًا أو عنوانًا أو إحداثيات مثل: (21.1932564, 42.7134373)"
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"حسنًا" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
     }];
 }
 
