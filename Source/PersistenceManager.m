@@ -1,4 +1,5 @@
 #import "PersistenceManager.h"
+#import "LocationSpoofer.h"
 #import <os/lock.h>
 
 // Plaintext NSUserDefaults in the host sandbox; readable by the host process and device backups.
@@ -306,6 +307,10 @@ static const NSUInteger kLSMaxRecentLocations = 5;
     [self.defaults setBool:self.cachedFluctuationEnabled forKey:kKeyFluctuationEnabled];
     [self.defaults setDouble:self.cachedFluctuationRadius forKey:kKeyFluctuationRadius];
     os_unfair_lock_unlock(&_lock);
+
+    if (enabled) {
+        LSNotifySpoofLocationChanged();
+    }
     return YES;
 }
 
