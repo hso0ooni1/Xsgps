@@ -16,8 +16,6 @@ static NSString * const kLSSuiteName = @"com.xsgps.dylib";
 @property (nonatomic, assign) CLLocationCoordinate2D targetCoordinate;
 @property (nonatomic, assign) BOOL hasAnchor;
 @property (nonatomic, assign) BOOL hasTarget;
-@property (nonatomic, assign) BOOL enabled;
-@property (nonatomic, assign) double radius;
 @end
 
 @implementation LSSmoothRandomMovementManager
