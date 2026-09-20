@@ -1,1 +1,162 @@
-#import "LSSmoothRandomMovementManager.h"\n#import "PersistenceManager.h"\n#import <math.h>\n\nstatic NSString * const kLSSmoothEnabledKey = @"LSSmoothRandomEnabled";\nstatic NSString * const kLSSmoothRadiusKey = @"LSSmoothRandomRadius";\nstatic NSString * const kLSSmoothAnchorLatKey = @"LSSmoothRandomAnchorLat";\nstatic NSString * const kLSSmoothAnchorLonKey = @"LSSmoothRandomAnchorLon";\nstatic NSString * const kLSSuiteName = @"com.xsgps.dylib";\n\n@interface LSSmoothRandomMovementManager ()\n@property (nonatomic, strong) NSUserDefaults *defaults;\n@property (nonatomic, strong, nullable) NSTimer *timer;\n@property (nonatomic, assign) CLLocationCoordinate2D anchorCoordinate;\n@property (nonatomic, assign) CLLocationCoordinate2D currentCoordinate;\n@property (nonatomic, assign) CLLocationCoordinate2D targetCoordinate;\n@property (nonatomic, assign) BOOL hasAnchor;\n@property (nonatomic, assign) BOOL hasTarget;\n@property (nonatomic, assign) BOOL enabled;\n@property (nonatomic, assign) double radius;\n@end\n\n@implementation LSSmoothRandomMovementManager\n\n+ (instancetype)shared {\n    static LSSmoothRandomMovementManager *instance = nil;\n    static dispatch_once_t onceToken;\n    dispatch_once(&onceToken, ^{\n        instance = [[LSSmoothRandomMovementManager alloc] initPrivate];\n    });\n    return instance;\n}\n\n- (instancetype)initPrivate {\n    self = [super init];\n    if (self) {\n        _defaults = [[NSUserDefaults alloc] initWithSuiteName:kLSSuiteName];\n        _enabled = [_defaults boolForKey:kLSSmoothEnabledKey];\n        _radius = [_defaults doubleForKey:kLSSmoothRadiusKey];\n        if (_radius <= 0.0) _radius = 50.0;\n        if ([_defaults objectForKey:kLSSmoothAnchorLatKey] &&\n            [_defaults objectForKey:kLSSmoothAnchorLonKey]) {\n            CLLocationCoordinate2D anchor = CLLocationCoordinate2DMake(\n                [_defaults doubleForKey:kLSSmoothAnchorLatKey],\n                [_defaults doubleForKey:kLSSmoothAnchorLonKey]);\n            if (CLLocationCoordinate2DIsValid(anchor)) {\n                _anchorCoordinate = anchor;\n                _currentCoordinate = anchor;\n                _hasAnchor = YES;\n            }\n        }\n    }\n    return self;\n}\n\n- (void)restoreIfNeeded {\n    [PersistenceManager shared].fluctuationEnabled = NO;\n    if (!self.hasAnchor && [PersistenceManager shared].hasStoredCoordinate) {\n        [self resetAnchorToCoordinate:[PersistenceManager shared].spoofCoordinate];\n    }\n    if (self.enabled && self.hasAnchor) [self startTimerIfNeeded];\n}\n\n- (void)setRadius:(double)radius {\n    _radius = MAX(1.0, MIN(5000.0, radius));\n    [self.defaults setDouble:_radius forKey:kLSSmoothRadiusKey];\n    self.hasTarget = NO;\n}\n\n- (void)setEnabled:(BOOL)enabled {\n    if (enabled == _enabled) return;\n    _enabled = enabled;\n    [self.defaults setBool:enabled forKey:kLSSmoothEnabledKey];\n    [PersistenceManager shared].fluctuationEnabled = NO;\n    if (enabled) {\n        if (!self.hasAnchor && [PersistenceManager shared].hasStoredCoordinate) {\n            [self resetAnchorToCoordinate:[PersistenceManager shared].spoofCoordinate];\n        }\n        [self startTimerIfNeeded];\n    } else {\n        [self stopTimer];\n        if (self.hasAnchor) {\n            BOOL spoofing = [PersistenceManager shared].isSpoofingEnabled;\n            [[PersistenceManager shared] setSpoofCoordinate:self.anchorCoordinate enabled:spoofing];\n            self.currentCoordinate = self.anchorCoordinate;\n        }\n        self.hasTarget = NO;\n    }\n}\n\n- (void)setEnabled:(BOOL)enabled anchorCoordinate:(CLLocationCoordinate2D)coordinate {\n    if (CLLocationCoordinate2DIsValid(coordinate)) [self resetAnchorToCoordinate:coordinate];\n    self.enabled = enabled;\n    if (enabled) [self startTimerIfNeeded];\n}\n\n- (void)resetAnchorToCoordinate:(CLLocationCoordinate2D)coordinate {\n    if (!CLLocationCoordinate2DIsValid(coordinate)) return;\n    self.anchorCoordinate = coordinate;\n    self.currentCoordinate = coordinate;\n    self.hasAnchor = YES;\n    self.hasTarget = NO;\n    [self.defaults setDouble:coordinate.latitude forKey:kLSSmoothAnchorLatKey];\n    [self.defaults setDouble:coordinate.longitude forKey:kLSSmoothAnchorLonKey];\n    BOOL spoofing = [PersistenceManager shared].isSpoofingEnabled;\n    [[PersistenceManager shared] setSpoofCoordinate:coordinate enabled:spoofing];\n}\n\n- (void)startTimerIfNeeded {\n    if (self.timer || !self.enabled || !self.hasAnchor) return;\n    self.timer = [NSTimer timerWithTimeInterval:0.12 target:self selector:@selector(handleTick) userInfo:nil repeats:YES];\n    [[NSRunLoop mainRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];\n}\n\n- (void)stopTimer {\n    [self.timer invalidate];\n    self.timer = nil;\n}\n\n- (double)distanceMetersFrom:(CLLocationCoordinate2D)a to:(CLLocationCoordinate2D)b {\n    double meanLat = ((a.latitude + b.latitude) * 0.5) * M_PI / 180.0;\n    double dy = (b.latitude - a.latitude) * 111320.0;\n    double dx = (b.longitude - a.longitude) * 111320.0 * MAX(0.000001, cos(meanLat));\n    return hypot(dx, dy);\n}\n\n- (CLLocationCoordinate2D)coordinateFrom:(CLLocationCoordinate2D)origin offsetEastMeters:(double)east offsetNorthMeters:(double)north {\n    double lat = origin.latitude + north / 111320.0;\n    double cosLat = MAX(0.000001, cos(origin.latitude * M_PI / 180.0));\n    double lon = origin.longitude + east / (111320.0 * cosLat);\n    return CLLocationCoordinate2DMake(lat, lon);\n}\n\n- (void)chooseNextTarget {\n    double maxRadius = MAX(1.0, self.radius);\n    double minDistance = MIN(maxRadius, MAX(2.0, maxRadius * 0.18));\n    double unit = (double)arc4random_uniform(UINT32_MAX) / (double)UINT32_MAX;\n    double distance = minDistance + (maxRadius - minDistance) * sqrt(unit);\n    double angle = ((double)arc4random_uniform(UINT32_MAX) / (double)UINT32_MAX) * 2.0 * M_PI;\n    self.targetCoordinate = [self coordinateFrom:self.anchorCoordinate\n                                offsetEastMeters:sin(angle) * distance\n                               offsetNorthMeters:cos(angle) * distance];\n    self.hasTarget = YES;\n}\n\n- (void)handleTick {\n    if (!self.enabled || !self.hasAnchor) return;\n    if (!self.hasTarget) [self chooseNextTarget];\n    double remaining = [self distanceMetersFrom:self.currentCoordinate to:self.targetCoordinate];\n    if (remaining < 0.35) { self.hasTarget = NO; return; }\n    const double stepMeters = 1.15 * 0.12;\n    double fraction = MIN(1.0, stepMeters / MAX(remaining, 0.001));\n    CLLocationDegrees lat = self.currentCoordinate.latitude + (self.targetCoordinate.latitude - self.currentCoordinate.latitude) * fraction;\n    CLLocationDegrees lon = self.currentCoordinate.longitude + (self.targetCoordinate.longitude - self.currentCoordinate.longitude) * fraction;\n    CLLocationCoordinate2D next = CLLocationCoordinate2DMake(lat, lon);\n    if ([self distanceMetersFrom:self.anchorCoordinate to:next] > self.radius + 0.5) { self.hasTarget = NO; return; }\n    self.currentCoordinate = next;\n    BOOL spoofing = [PersistenceManager shared].isSpoofingEnabled;\n    [[PersistenceManager shared] setTransientSpoofCoordinate:next enabled:spoofing];\n}\n\n@end\n
+#import "LSSmoothRandomMovementManager.h"
+#import "PersistenceManager.h"
+#import <math.h>
+
+static NSString * const kLSSmoothEnabledKey = @"LSSmoothRandomEnabled";
+static NSString * const kLSSmoothRadiusKey = @"LSSmoothRandomRadius";
+static NSString * const kLSSmoothAnchorLatKey = @"LSSmoothRandomAnchorLat";
+static NSString * const kLSSmoothAnchorLonKey = @"LSSmoothRandomAnchorLon";
+static NSString * const kLSSuiteName = @"com.xsgps.dylib";
+
+@interface LSSmoothRandomMovementManager ()
+@property (nonatomic, strong) NSUserDefaults *defaults;
+@property (nonatomic, strong, nullable) NSTimer *timer;
+@property (nonatomic, assign) CLLocationCoordinate2D anchorCoordinate;
+@property (nonatomic, assign) CLLocationCoordinate2D currentCoordinate;
+@property (nonatomic, assign) CLLocationCoordinate2D targetCoordinate;
+@property (nonatomic, assign) BOOL hasAnchor;
+@property (nonatomic, assign) BOOL hasTarget;
+@property (nonatomic, assign) BOOL enabled;
+@property (nonatomic, assign) double radius;
+@end
+
+@implementation LSSmoothRandomMovementManager
+
++ (instancetype)shared {
+    static LSSmoothRandomMovementManager *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [[LSSmoothRandomMovementManager alloc] initPrivate];
+    });
+    return instance;
+}
+
+- (instancetype)initPrivate {
+    self = [super init];
+    if (self) {
+        _defaults = [[NSUserDefaults alloc] initWithSuiteName:kLSSuiteName];
+        _enabled = [_defaults boolForKey:kLSSmoothEnabledKey];
+        _radius = [_defaults doubleForKey:kLSSmoothRadiusKey];
+        if (_radius <= 0.0) _radius = 50.0;
+        if ([_defaults objectForKey:kLSSmoothAnchorLatKey] &&
+            [_defaults objectForKey:kLSSmoothAnchorLonKey]) {
+            CLLocationCoordinate2D anchor = CLLocationCoordinate2DMake(
+                [_defaults doubleForKey:kLSSmoothAnchorLatKey],
+                [_defaults doubleForKey:kLSSmoothAnchorLonKey]);
+            if (CLLocationCoordinate2DIsValid(anchor)) {
+                _anchorCoordinate = anchor;
+                _currentCoordinate = anchor;
+                _hasAnchor = YES;
+            }
+        }
+    }
+    return self;
+}
+
+- (void)restoreIfNeeded {
+    [PersistenceManager shared].fluctuationEnabled = NO;
+    if (!self.hasAnchor && [PersistenceManager shared].hasStoredCoordinate) {
+        [self resetAnchorToCoordinate:[PersistenceManager shared].spoofCoordinate];
+    }
+    if (self.enabled && self.hasAnchor) [self startTimerIfNeeded];
+}
+
+- (void)setRadius:(double)radius {
+    _radius = MAX(1.0, MIN(5000.0, radius));
+    [self.defaults setDouble:_radius forKey:kLSSmoothRadiusKey];
+    self.hasTarget = NO;
+}
+
+- (void)setEnabled:(BOOL)enabled {
+    if (enabled == _enabled) return;
+    _enabled = enabled;
+    [self.defaults setBool:enabled forKey:kLSSmoothEnabledKey];
+    [PersistenceManager shared].fluctuationEnabled = NO;
+    if (enabled) {
+        if (!self.hasAnchor && [PersistenceManager shared].hasStoredCoordinate) {
+            [self resetAnchorToCoordinate:[PersistenceManager shared].spoofCoordinate];
+        }
+        [self startTimerIfNeeded];
+    } else {
+        [self stopTimer];
+        if (self.hasAnchor) {
+            BOOL spoofing = [PersistenceManager shared].isSpoofingEnabled;
+            [[PersistenceManager shared] setSpoofCoordinate:self.anchorCoordinate enabled:spoofing];
+            self.currentCoordinate = self.anchorCoordinate;
+        }
+        self.hasTarget = NO;
+    }
+}
+
+- (void)setEnabled:(BOOL)enabled anchorCoordinate:(CLLocationCoordinate2D)coordinate {
+    if (CLLocationCoordinate2DIsValid(coordinate)) [self resetAnchorToCoordinate:coordinate];
+    self.enabled = enabled;
+    if (enabled) [self startTimerIfNeeded];
+}
+
+- (void)resetAnchorToCoordinate:(CLLocationCoordinate2D)coordinate {
+    if (!CLLocationCoordinate2DIsValid(coordinate)) return;
+    self.anchorCoordinate = coordinate;
+    self.currentCoordinate = coordinate;
+    self.hasAnchor = YES;
+    self.hasTarget = NO;
+    [self.defaults setDouble:coordinate.latitude forKey:kLSSmoothAnchorLatKey];
+    [self.defaults setDouble:coordinate.longitude forKey:kLSSmoothAnchorLonKey];
+    BOOL spoofing = [PersistenceManager shared].isSpoofingEnabled;
+    [[PersistenceManager shared] setSpoofCoordinate:coordinate enabled:spoofing];
+}
+
+- (void)startTimerIfNeeded {
+    if (self.timer || !self.enabled || !self.hasAnchor) return;
+    self.timer = [NSTimer timerWithTimeInterval:0.12 target:self selector:@selector(handleTick) userInfo:nil repeats:YES];
+    [[NSRunLoop mainRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
+}
+
+- (void)stopTimer {
+    [self.timer invalidate];
+    self.timer = nil;
+}
+
+- (double)distanceMetersFrom:(CLLocationCoordinate2D)a to:(CLLocationCoordinate2D)b {
+    double meanLat = ((a.latitude + b.latitude) * 0.5) * M_PI / 180.0;
+    double dy = (b.latitude - a.latitude) * 111320.0;
+    double dx = (b.longitude - a.longitude) * 111320.0 * MAX(0.000001, cos(meanLat));
+    return hypot(dx, dy);
+}
+
+- (CLLocationCoordinate2D)coordinateFrom:(CLLocationCoordinate2D)origin offsetEastMeters:(double)east offsetNorthMeters:(double)north {
+    double lat = origin.latitude + north / 111320.0;
+    double cosLat = MAX(0.000001, cos(origin.latitude * M_PI / 180.0));
+    double lon = origin.longitude + east / (111320.0 * cosLat);
+    return CLLocationCoordinate2DMake(lat, lon);
+}
+
+- (void)chooseNextTarget {
+    double maxRadius = MAX(1.0, self.radius);
+    double minDistance = MIN(maxRadius, MAX(2.0, maxRadius * 0.18));
+    double unit = (double)arc4random_uniform(UINT32_MAX) / (double)UINT32_MAX;
+    double distance = minDistance + (maxRadius - minDistance) * sqrt(unit);
+    double angle = ((double)arc4random_uniform(UINT32_MAX) / (double)UINT32_MAX) * 2.0 * M_PI;
+    self.targetCoordinate = [self coordinateFrom:self.anchorCoordinate
+                                offsetEastMeters:sin(angle) * distance
+                               offsetNorthMeters:cos(angle) * distance];
+    self.hasTarget = YES;
+}
+
+- (void)handleTick {
+    if (!self.enabled || !self.hasAnchor) return;
+    if (!self.hasTarget) [self chooseNextTarget];
+    double remaining = [self distanceMetersFrom:self.currentCoordinate to:self.targetCoordinate];
+    if (remaining < 0.35) { self.hasTarget = NO; return; }
+    const double stepMeters = 1.15 * 0.12;
+    double fraction = MIN(1.0, stepMeters / MAX(remaining, 0.001));
+    CLLocationDegrees lat = self.currentCoordinate.latitude + (self.targetCoordinate.latitude - self.currentCoordinate.latitude) * fraction;
+    CLLocationDegrees lon = self.currentCoordinate.longitude + (self.targetCoordinate.longitude - self.currentCoordinate.longitude) * fraction;
+    CLLocationCoordinate2D next = CLLocationCoordinate2DMake(lat, lon);
+    if ([self distanceMetersFrom:self.anchorCoordinate to:next] > self.radius + 0.5) { self.hasTarget = NO; return; }
+    self.currentCoordinate = next;
+    BOOL spoofing = [PersistenceManager shared].isSpoofingEnabled;
+    [[PersistenceManager shared] setTransientSpoofCoordinate:next enabled:spoofing];
+}
+
+@end
