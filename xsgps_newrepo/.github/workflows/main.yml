@@ -1,0 +1,49 @@
+name: Build XsGpS dylib
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone Theos
+        shell: bash
+        run: git clone --recursive --depth 1 https://github.com/theos/theos.git ~/theos
+
+      - name: Download iOS 16 SDK
+        shell: bash
+        run: |
+          mkdir -p ~/theos/sdks
+          cd ~/theos/sdks
+          git init
+          git remote add origin https://github.com/xybp888/iOS-SDKs.git
+          git config core.sparseCheckout true
+          echo "iPhoneOS16.5.sdk/*" > .git/info/sparse-checkout
+          git pull --depth 1 origin master
+
+      - name: Install ldid
+        shell: bash
+        run: brew install ldid
+
+      - name: Build
+        shell: bash
+        run: |
+          export THEOS=~/theos
+          make clean
+          make FINALPACKAGE=1
+          find .theos -name '*.dylib' -print
+
+      - name: Upload dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: XsGpS-dylib
+          path: |
+            .theos/obj/**/*.dylib
+            .theos/obj/*.dylib
+          if-no-files-found: error
