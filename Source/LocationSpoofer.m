@@ -16,6 +16,9 @@ static NSMutableSet *ls_observedDelegateClasses = nil;
 static dispatch_once_t ls_delegateTablesOnceToken;
 static dispatch_once_t ls_hookSelectorsOnceToken;
 static os_log_t ls_log = NULL;
+static NSHashTable<CLLocationManager *> *ls_recentLocationConsumers = nil;
+static dispatch_once_t ls_recentLocationConsumersOnceToken;
+static BOOL ls_refreshScheduled = NO;
 
 static SEL ls_hookDidUpdateLocationsSEL = NULL;
 static SEL ls_hookDidUpdateToLocationSEL = NULL;
@@ -36,6 +39,29 @@ void LSSetHooksBypassed(BOOL bypassed) {
 static BOOL LSHooksBypassed(void) {
     @synchronized([LocationSpoofer class]) {
         return ls_hooksBypassed;
+    }
+}
+
+static void LSInitializeRecentLocationConsumers(void) {
+    dispatch_once(&ls_recentLocationConsumersOnceToken, ^{
+        ls_recentLocationConsumers = [NSHashTable weakObjectsHashTable];
+    });
+}
+
+static void LSRememberLocationConsumer(CLLocationManager *manager) {
+    if (!manager) {
+        return;
+    }
+    LSInitializeRecentLocationConsumers();
+    @synchronized(ls_recentLocationConsumers) {
+        [ls_recentLocationConsumers addObject:manager];
+    }
+}
+
+static NSArray<CLLocationManager *> *LSSnapshotLocationConsumers(void) {
+    LSInitializeRecentLocationConsumers();
+    @synchronized(ls_recentLocationConsumers) {
+        return ls_recentLocationConsumers.allObjects ?: @[];
     }
 }
 
@@ -120,6 +146,60 @@ CLLocation *LSCreateSpoofedLocation(void) {
                                 store.altitude,
                                 6.0,
                                 0.0);
+}
+
+void LSNotifySpoofLocationChanged(void) {
+    if (!LSShouldSpoof()) {
+        return;
+    }
+
+    @synchronized([LocationSpoofer class]) {
+        if (ls_refreshScheduled) {
+            return;
+        }
+        ls_refreshScheduled = YES;
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @synchronized([LocationSpoofer class]) {
+            ls_refreshScheduled = NO;
+        }
+
+        if (!LSShouldSpoof()) {
+            return;
+        }
+
+        NSArray<CLLocationManager *> *managers = LSSnapshotLocationConsumers();
+        if (managers.count == 0) {
+            return;
+        }
+
+        CLLocation *location = LSCreateSpoofedLocation();
+        NSArray<CLLocation *> *locations = @[location];
+
+        for (CLLocationManager *manager in managers) {
+            id<CLLocationManagerDelegate> delegate = manager.delegate;
+            if (!delegate) {
+                continue;
+            }
+
+            SEL modernSelector = @selector(locationManager:didUpdateLocations:);
+            if ([delegate respondsToSelector:modernSelector]) {
+                ((void (*)(id, SEL, CLLocationManager *, NSArray<CLLocation *> *))objc_msgSend)(
+                    delegate, modernSelector, manager, locations);
+                continue;
+            }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            SEL legacySelector = @selector(locationManager:didUpdateToLocation:fromLocation:);
+            if ([delegate respondsToSelector:legacySelector]) {
+                ((void (*)(id, SEL, CLLocationManager *, CLLocation *, CLLocation *))objc_msgSend)(
+                    delegate, legacySelector, manager, location, nil);
+            }
+#pragma clang diagnostic pop
+        }
+    });
 }
 
 static BOOL LSIsSystemFrameworkBundle(NSBundle *bundle) {
@@ -236,6 +316,7 @@ static void LSSwizzleDelegateIfNeeded(id delegate) {
 
 static void LSHookDidUpdateLocations(id self, SEL _cmd, CLLocationManager *manager, NSArray<CLLocation *> *locations) {
     (void)_cmd;
+    LSRememberLocationConsumer(manager);
     NSArray<CLLocation *> *deliveredLocations = locations;
     if (LSShouldSpoof()) {
         deliveredLocations = @[LSCreateSpoofedLocation()];
@@ -248,6 +329,7 @@ static void LSHookDidUpdateLocations(id self, SEL _cmd, CLLocationManager *manag
 
 static void LSHookDidUpdateToLocation(id self, SEL _cmd, CLLocationManager *manager, CLLocation *newLocation, CLLocation *oldLocation) {
     (void)_cmd;
+    LSRememberLocationConsumer(manager);
     CLLocation *deliveredLocation = newLocation;
     if (LSShouldSpoof()) {
         deliveredLocation = LSCreateSpoofedLocation();
