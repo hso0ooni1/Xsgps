@@ -87,7 +87,7 @@
     label.text = title;
     label.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightBold];
     label.textColor = UIColor.whiteColor;
-    label.textAlignment = NSTextAlignmentRight;
+    label.textAlignment = NSTextAlignmentLeft;
     [row addSubview:label];
 
     accessory.translatesAutoresizingMaskIntoConstraints = NO;
@@ -173,6 +173,8 @@
     self.searchBar.placeholder = @"عنوان، إحداثيات، أو عنوان وطني";
     self.searchBar.tintColor = UIColor.whiteColor;
     self.searchBar.searchTextField.textColor = UIColor.whiteColor;
+    self.searchBar.searchTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"عنوان، إحداثيات، أو عنوان وطني"
+                                                                                           attributes:@{NSForegroundColorAttributeName: [UIColor colorWithWhite:1.0 alpha:0.72]}];
     self.searchBar.searchTextField.backgroundColor = [UIColor colorWithWhite:1 alpha:0.07];
     self.searchBar.searchTextField.layer.cornerRadius = 15.0;
     self.searchBar.searchTextField.layer.cornerCurve = kCACornerCurveContinuous;
@@ -205,6 +207,11 @@
     self.mapTypeControl = [[UISegmentedControl alloc] initWithItems:@[@"عادي", @"قمر صناعي"]];
     self.mapTypeControl.translatesAutoresizingMaskIntoConstraints = NO;
     self.mapTypeControl.selectedSegmentIndex = 0;
+    self.mapTypeControl.selectedSegmentTintColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+    NSDictionary *segmentText = @{NSForegroundColorAttributeName: UIColor.whiteColor,
+                                  NSFontAttributeName: [UIFont systemFontOfSize:13.0 weight:UIFontWeightSemibold]};
+    [self.mapTypeControl setTitleTextAttributes:segmentText forState:UIControlStateNormal];
+    [self.mapTypeControl setTitleTextAttributes:segmentText forState:UIControlStateSelected];
     [self.mapTypeControl addTarget:self action:@selector(mapTypeChanged) forControlEvents:UIControlEventValueChanged];
     [self.panel addSubview:self.mapTypeControl];
 
@@ -213,14 +220,14 @@
 
     self.locationSwitch = [[UISwitch alloc] init];
     [self.locationSwitch addTarget:self action:@selector(locationSwitchChanged) forControlEvents:UIControlEventValueChanged];
-    UIView *locationRow = [self rowWithIcon:@"power" title:@"تفعيل تغيير الموقع" tint:[UIColor colorWithRed:0.20 green:0.90 blue:0.35 alpha:1.0] accessory:self.locationSwitch];
+    UIView *locationRow = [self rowWithIcon:@"power" title:@"تفعيل الموقع" tint:[UIColor colorWithRed:0.20 green:0.90 blue:0.35 alpha:1.0] accessory:self.locationSwitch];
     [self.panel addSubview:locationRow];
 
     self.fluctuationSwitch = [[UISwitch alloc] init];
     [self.fluctuationSwitch addTarget:self action:@selector(fluctuationChanged) forControlEvents:UIControlEventValueChanged];
     self.radiusButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.radiusButton setTitle:@"النطاق" forState:UIControlStateNormal];
-    [self.radiusButton setTitleColor:[UIColor colorWithRed:0.95 green:0.25 blue:0.95 alpha:1.0] forState:UIControlStateNormal];
+    [self.radiusButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     self.radiusButton.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
     self.radiusButton.backgroundColor = [UIColor colorWithRed:0.28 green:0.05 blue:0.30 alpha:1.0];
     self.radiusButton.layer.cornerRadius = 10.0;
@@ -232,16 +239,6 @@
     fluctuationAccessory.alignment = UIStackViewAlignmentCenter;
     UIView *fluctuationRow = [self rowWithIcon:@"shuffle" title:@"حركة عشوائية" tint:[UIColor colorWithRed:0.95 green:0.15 blue:0.95 alpha:1.0] accessory:fluctuationAccessory];
     [self.panel addSubview:fluctuationRow];
-
-    UIButton *copyDevice = [UIButton buttonWithType:UIButtonTypeSystem];
-    [copyDevice setTitle:@"نسخ" forState:UIControlStateNormal];
-    [copyDevice setTitleColor:[UIColor colorWithRed:1.0 green:0.55 blue:0.20 alpha:1.0] forState:UIControlStateNormal];
-    copyDevice.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
-    copyDevice.backgroundColor = [UIColor colorWithRed:0.28 green:0.14 blue:0.04 alpha:1.0];
-    copyDevice.layer.cornerRadius = 10.0;
-    [copyDevice addTarget:self action:@selector(copyDeviceID) forControlEvents:UIControlEventTouchUpInside];
-    UIView *deviceRow = [self rowWithIcon:@"iphone" title:@"معرف الجهاز" tint:[UIColor colorWithRed:1.0 green:0.50 blue:0.16 alpha:1.0] accessory:copyDevice];
-    [self.panel addSubview:deviceRow];
 
     [NSLayoutConstraint activateConstraints:@[
         [self.panel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:18.0],
@@ -312,13 +309,7 @@
         [self.radiusButton.widthAnchor constraintEqualToConstant:68.0],
         [self.radiusButton.heightAnchor constraintEqualToConstant:31.0],
 
-        [deviceRow.topAnchor constraintEqualToAnchor:fluctuationRow.bottomAnchor constant:8.0],
-        [deviceRow.leadingAnchor constraintEqualToAnchor:locationRow.leadingAnchor],
-        [deviceRow.trailingAnchor constraintEqualToAnchor:locationRow.trailingAnchor],
-        [deviceRow.bottomAnchor constraintEqualToAnchor:self.panel.bottomAnchor constant:-11.0],
-
-        [copyDevice.widthAnchor constraintEqualToConstant:62.0],
-        [copyDevice.heightAnchor constraintEqualToConstant:31.0],
+        [fluctuationRow.bottomAnchor constraintEqualToAnchor:self.panel.bottomAnchor constant:-11.0],
     ]];
 
     // Allow the map to absorb extra height on taller phones while keeping a compact panel.
@@ -566,13 +557,6 @@
     if (!self.fetchingRealLocation) return;
     if (status == kCLAuthorizationStatusAuthorizedWhenInUse || status == kCLAuthorizationStatusAuthorizedAlways) [self beginFastRealLocationLookup];
     else if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) { self.fetchingRealLocation = NO; LSSetHooksBypassed(NO); }
-}
-
-- (void)copyDeviceID {
-    UIPasteboard.generalPasteboard.string = [LSActivationManager shared].deviceID;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"تم النسخ" message:@"تم نسخ معرف الجهاز" preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"حسنًا" style:UIAlertActionStyleDefault handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)closeTapped {
