@@ -16,6 +16,7 @@ jobs:
 
       - name: Install Theos
         run: |
+          brew install ldid
           export THEOS="$HOME/theos"
           git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
