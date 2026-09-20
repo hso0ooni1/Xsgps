@@ -25,7 +25,9 @@ static NSString *LSNormalizeCoordinateSearchText(NSString *input) {
     [text replaceOccurrencesOfString:@"−" withString:@"-" options:0 range:NSMakeRange(0, text.length)];
     [text replaceOccurrencesOfString:@"–" withString:@"-" options:0 range:NSMakeRange(0, text.length)];
     [text replaceOccurrencesOfString:@"٬" withString:@"" options:0 range:NSMakeRange(0, text.length)];
-    return [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSString *decoded = [trimmed stringByRemovingPercentEncoding];
+    return decoded.length ? decoded : trimmed;
 }
 
 static BOOL LSCoordinateFromPair(double first, double second, CLLocationCoordinate2D *coordinate) {
@@ -53,9 +55,21 @@ static BOOL LSParseCoordinateSearchQuery(NSString *query, CLLocationCoordinate2D
     NSString *normalized = LSNormalizeCoordinateSearchText(query);
     if (normalized.length == 0) return NO;
 
-    // Google Maps URLs commonly contain /@lat,lon or ?q=lat,lon.
-    if ([normalized rangeOfString:@"maps" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-        [normalized rangeOfString:@"google" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+    // Google Maps place links often contain the precise pin as !3dLAT!4dLON.
+    // Prefer that over the /@lat,lon viewport center when both are present.
+    if ([normalized rangeOfString:@"google" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+        [normalized rangeOfString:@"maps" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+        NSRegularExpression *pinPair = [NSRegularExpression regularExpressionWithPattern:@"!3d([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))!4d([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))"
+                                                                                 options:NSRegularExpressionCaseInsensitive
+                                                                                   error:nil];
+        NSTextCheckingResult *pinMatch = [pinPair firstMatchInString:normalized options:0 range:NSMakeRange(0, normalized.length)];
+        if (pinMatch.numberOfRanges == 3) {
+            double lat = [[normalized substringWithRange:[pinMatch rangeAtIndex:1]] doubleValue];
+            double lon = [[normalized substringWithRange:[pinMatch rangeAtIndex:2]] doubleValue];
+            if (LSCoordinateFromPair(lat, lon, coordinate)) return YES;
+        }
+
+        // Full Google/Apple map URLs commonly contain /@lat,lon, ?q=lat,lon, ll=lat,lon, etc.
         NSRegularExpression *urlPair = [NSRegularExpression regularExpressionWithPattern:@"([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*[,،]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))"
                                                                                  options:0
                                                                                    error:nil];
@@ -101,6 +115,46 @@ static BOOL LSParseCoordinateSearchQuery(NSString *query, CLLocationCoordinate2D
     }
 
     return LSCoordinateFromPair(first, second, coordinate);
+}
+
+static BOOL LSLooksLikeMapLink(NSString *query) {
+    NSString *trimmed = [query stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSURLComponents *components = [NSURLComponents componentsWithString:trimmed];
+    NSString *scheme = components.scheme.lowercaseString;
+    NSString *host = components.host.lowercaseString;
+    if (!([scheme isEqualToString:@"https"] || [scheme isEqualToString:@"http"]) || host.length == 0) return NO;
+
+    return [host isEqualToString:@"maps.app.goo.gl"] ||
+           [host hasSuffix:@".google.com"] ||
+           [host isEqualToString:@"google.com"] ||
+           [host hasSuffix:@".goo.gl"] ||
+           [host isEqualToString:@"goo.gl"] ||
+           [host isEqualToString:@"maps.apple.com"];
+}
+
+static NSString *LSSearchTextFromMapURL(NSURL *url) {
+    if (!url) return nil;
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+
+    NSArray<NSString *> *preferredKeys = @[@"query", @"q", @"destination", @"ll", @"center"];
+    for (NSString *key in preferredKeys) {
+        for (NSURLQueryItem *item in components.queryItems) {
+            if ([item.name caseInsensitiveCompare:key] != NSOrderedSame || item.value.length == 0) continue;
+            NSString *value = LSNormalizeCoordinateSearchText(item.value);
+            if (value.length) return value;
+        }
+    }
+
+    NSString *path = [components.percentEncodedPath stringByRemovingPercentEncoding] ?: components.path;
+    NSRange placeRange = [path rangeOfString:@"/place/" options:NSCaseInsensitiveSearch];
+    if (placeRange.location != NSNotFound) {
+        NSString *tail = [path substringFromIndex:NSMaxRange(placeRange)];
+        NSString *place = [[tail componentsSeparatedByString:@"/"] firstObject];
+        place = [[place stringByReplacingOccurrencesOfString:@"+" withString:@" "]
+                 stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (place.length) return place;
+    }
+    return nil;
 }
 
 @interface MapPickerViewController () <MKMapViewDelegate, UISearchBarDelegate, CLLocationManagerDelegate>
@@ -264,10 +318,10 @@ static BOOL LSParseCoordinateSearchQuery(NSString *query, CLLocationCoordinate2D
     self.searchBar.translatesAutoresizingMaskIntoConstraints = NO;
     self.searchBar.delegate = self;
     self.searchBar.searchBarStyle = UISearchBarStyleMinimal;
-    self.searchBar.placeholder = @"عنوان، إحداثيات، أو عنوان وطني";
+    self.searchBar.placeholder = @"اسم، إحداثيات، أو رابط خرائط";
     self.searchBar.tintColor = UIColor.whiteColor;
     self.searchBar.searchTextField.textColor = UIColor.whiteColor;
-    self.searchBar.searchTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"عنوان، إحداثيات، أو عنوان وطني"
+    self.searchBar.searchTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"اسم، إحداثيات، أو رابط خرائط"
                                                                                            attributes:@{NSForegroundColorAttributeName: [UIColor colorWithWhite:1.0 alpha:0.72]}];
     self.searchBar.searchTextField.backgroundColor = [UIColor colorWithWhite:1 alpha:0.07];
     self.searchBar.searchTextField.layer.cornerRadius = 15.0;
@@ -460,14 +514,81 @@ static BOOL LSParseCoordinateSearchQuery(NSString *query, CLLocationCoordinate2D
 
     CLLocationCoordinate2D coordinate = kCLLocationCoordinate2DInvalid;
     if (LSParseCoordinateSearchQuery(query, &coordinate)) {
-        NSString *coordinateName = [NSString stringWithFormat:@"%.7f, %.7f", coordinate.latitude, coordinate.longitude];
-        self.searchBar.text = coordinateName;
-        [self movePinToCoordinate:coordinate name:coordinateName animated:YES];
-        [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
+        [self applySearchCoordinate:coordinate];
+        return;
+    }
+
+    if (LSLooksLikeMapLink(query)) {
+        [self resolveMapLinkAndSearch:query];
         return;
     }
 
     [self performPlaceSearchForQuery:query preferCurrentRegion:YES];
+}
+
+- (void)applySearchCoordinate:(CLLocationCoordinate2D)coordinate {
+    NSString *coordinateName = [NSString stringWithFormat:@"%.7f, %.7f", coordinate.latitude, coordinate.longitude];
+    self.searchBar.text = coordinateName;
+    [self movePinToCoordinate:coordinate name:coordinateName animated:YES];
+    [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
+}
+
+- (void)resolveMapLinkAndSearch:(NSString *)linkText {
+    NSURL *url = [NSURL URLWithString:[linkText stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]];
+    if (!url) {
+        [self performPlaceSearchForQuery:linkText preferCurrentRegion:YES];
+        return;
+    }
+
+    // Full links can contain a readable query/place name even when they do not contain coordinates.
+    NSString *directText = LSSearchTextFromMapURL(url);
+    CLLocationCoordinate2D directCoordinate = kCLLocationCoordinate2DInvalid;
+    if (directText.length && LSParseCoordinateSearchQuery(directText, &directCoordinate)) {
+        [self applySearchCoordinate:directCoordinate];
+        return;
+    }
+
+    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    configuration.timeoutIntervalForRequest = 10.0;
+    configuration.timeoutIntervalForResource = 12.0;
+    configuration.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+    NSURLSessionDataTask *task = [session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        (void)data;
+        NSURL *resolvedURL = response.URL ?: url;
+        NSString *resolvedText = resolvedURL.absoluteString ?: linkText;
+
+        CLLocationCoordinate2D coordinate = kCLLocationCoordinate2DInvalid;
+        BOOL foundCoordinate = LSParseCoordinateSearchQuery(resolvedText, &coordinate);
+        NSString *placeText = foundCoordinate ? nil : LSSearchTextFromMapURL(resolvedURL);
+        if (!placeText.length && !foundCoordinate) placeText = directText;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (foundCoordinate) {
+                [self applySearchCoordinate:coordinate];
+                return;
+            }
+
+            if (placeText.length) {
+                [self performPlaceSearchForQuery:placeText preferCurrentRegion:NO];
+                return;
+            }
+
+            if (error) {
+                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"تعذر فتح رابط الخريطة"
+                                                                               message:@"تأكد من اتصال الإنترنت وصحة رابط Google Maps ثم حاول مرة ثانية."
+                                                                        preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"حسنًا" style:UIAlertActionStyleDefault handler:nil]];
+                [self presentViewController:alert animated:YES completion:nil];
+                return;
+            }
+
+            [self performPlaceSearchForQuery:resolvedText preferCurrentRegion:NO];
+        });
+        [session finishTasksAndInvalidate];
+    }];
+    [task resume];
 }
 
 - (void)performPlaceSearchForQuery:(NSString *)query preferCurrentRegion:(BOOL)preferCurrentRegion {
