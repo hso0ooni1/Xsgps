@@ -21,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (class, nonatomic, readonly) BookmarksManager *shared;
 
 - (NSArray<LSBookmark *> *)allBookmarks;
+- (void)reloadAfterTransfer;
 - (void)addBookmarkWithName:(NSString *)name coordinate:(CLLocationCoordinate2D)coordinate;
 - (void)removeBookmarkAtIndex:(NSUInteger)index;
 - (void)renameBookmark:(NSString *)newName atIndex:(NSUInteger)index;
