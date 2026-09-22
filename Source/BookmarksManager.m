@@ -94,6 +94,14 @@ static const NSUInteger kLSMaxBookmarks = 50;
     return self;
 }
 
+- (void)reloadAfterTransfer {
+    @synchronized(self) {
+        [self.bookmarks removeAllObjects];
+        self.loaded = NO;
+        [self loadIfNeeded];
+    }
+}
+
 - (void)loadIfNeeded {
     @synchronized(self) {
         if (self.loaded) {
