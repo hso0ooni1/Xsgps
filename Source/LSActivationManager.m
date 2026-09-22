@@ -1,4 +1,5 @@
 #import "LSActivationManager.h"
+#import "LSIdentitySettings.h"
 #import <UIKit/UIKit.h>
 #import <sys/utsname.h>
 
@@ -6,6 +7,7 @@ static NSString * const kLSActivationBaseURL = @"https://location-spoofer-api.hs
 static NSString * const kLSActivationSuite = @"com.xsgps.activation";
 static NSString * const kLSCodeKey = @"activation_code";
 static NSString * const kLSDeviceIDKey = @"device_id";
+static NSString * const kLSInstallationUUIDKey = @"app_installation_uuid";
 static NSString * const kLSExpiresKey = @"expires_at";
 static NSString * const kLSActiveKey = @"locally_active";
 static NSString * const kLSLastVerifyKey = @"last_verify";
@@ -14,6 +16,7 @@ static NSTimeInterval const kLSVerifyInterval = 300.0;
 @interface LSActivationManager ()
 @property (nonatomic, strong) NSUserDefaults *defaults;
 @property (nonatomic, copy, readwrite) NSString *deviceID;
+@property (nonatomic, copy, readwrite) NSString *installationUUID;
 @property (nonatomic, copy, readwrite, nullable) NSString *activationCode;
 @property (nonatomic, strong, readwrite, nullable) NSDate *expiresAt;
 @property (nonatomic, assign) BOOL locallyActive;
@@ -42,6 +45,11 @@ static NSTimeInterval const kLSVerifyInterval = 300.0;
         if (_deviceID.length == 0) {
             _deviceID = UIDevice.currentDevice.identifierForVendor.UUIDString ?: NSUUID.UUID.UUIDString;
             [_defaults setObject:_deviceID forKey:kLSDeviceIDKey];
+        }
+        _installationUUID = [_defaults stringForKey:kLSInstallationUUIDKey];
+        if (![[NSUUID alloc] initWithUUIDString:_installationUUID]) {
+            _installationUUID = NSUUID.UUID.UUIDString;
+            [_defaults setObject:_installationUUID forKey:kLSInstallationUUIDKey];
         }
     }
     return self;
@@ -90,6 +98,7 @@ static NSTimeInterval const kLSVerifyInterval = 300.0;
     return @{
         @"code": code ?: @"",
         @"device_id": self.deviceID ?: @"",
+        @"app_uuid": self.installationUUID ?: @"",
         @"device_name": device.name ?: @"iPhone",
         @"device_udid": self.deviceID ?: @"",
         @"ios_version": device.systemVersion ?: @"",
@@ -172,6 +181,85 @@ static NSTimeInterval const kLSVerifyInterval = 300.0;
         });
     }];
     [task resume];
+}
+
+- (void)postIdentityPath:(NSString *)path
+                 payload:(NSDictionary *)payload
+              completion:(void (^)(NSInteger, NSDictionary * _Nullable, NSError * _Nullable))completion {
+    NSURL *url = [NSURL URLWithString:[kLSActivationBaseURL stringByAppendingString:path]];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    NSError *serializationError = nil;
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:payload options:0 error:&serializationError];
+    if (serializationError) {
+        if (completion) completion(0, nil, serializationError);
+        return;
+    }
+    NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [(NSHTTPURLResponse *)response statusCode];
+        NSDictionary *result = nil;
+        if (data.length) {
+            id object = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if ([object isKindOfClass:NSDictionary.class]) result = object;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) completion(status, result, error);
+        });
+    }];
+    [task resume];
+}
+
+- (void)prepareIdentityTransferWithCompletion:(LSIdentityTransferCompletion)completion {
+    if (!self.isActivated || !self.activationCode.length) {
+        if (completion) completion(NO, @"فعّل XsGpS أولًا على الجهاز القديم", nil);
+        return;
+    }
+    NSMutableDictionary *payload = [[self devicePayloadWithCode:self.activationCode] mutableCopy];
+    payload[@"settings"] = [LSIdentitySettings exportSettings];
+    [self postIdentityPath:@"/identity/prepare" payload:payload completion:^(NSInteger status, NSDictionary *json, NSError *error) {
+        if (error || !json) {
+            if (completion) completion(NO, @"تعذر الاتصال بسيرفر التفعيل", nil);
+            return;
+        }
+        NSString *message = [json[@"message"] isKindOfClass:NSString.class] ? json[@"message"] : @"تعذر إنشاء رمز النقل";
+        BOOL success = status == 200 && [json[@"ok"] boolValue] && [json[@"transfer_code"] isKindOfClass:NSString.class];
+        if (completion) completion(success, message, success ? json[@"transfer_code"] : nil);
+    }];
+}
+
+- (void)completeIdentityTransferFromUUID:(NSString *)oldUUID
+                             transferCode:(NSString *)transferCode
+                               completion:(LSActivationCompletion)completion {
+    NSString *previous = [[oldUUID ?: @"" stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] uppercaseString];
+    NSString *token = [[transferCode ?: @"" stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] uppercaseString];
+    if (![[NSUUID alloc] initWithUUIDString:previous] || token.length < 16) {
+        if (completion) completion(NO, @"تأكد من معرف التطبيق السابق ورمز النقل");
+        return;
+    }
+    NSMutableDictionary *payload = [[self devicePayloadWithCode:@""] mutableCopy];
+    payload[@"old_app_uuid"] = previous;
+    payload[@"transfer_code"] = token;
+    payload[@"new_device_id"] = self.deviceID ?: @"";
+    [self postIdentityPath:@"/identity/complete" payload:payload completion:^(NSInteger status, NSDictionary *json, NSError *error) {
+        if (error || !json) {
+            if (completion) completion(NO, @"تعذر الاتصال بسيرفر التفعيل");
+            return;
+        }
+        BOOL success = status == 200 && [json[@"ok"] boolValue];
+        NSString *code = [json[@"activation_code"] isKindOfClass:NSString.class] ? json[@"activation_code"] : @"";
+        NSString *message = [json[@"message"] isKindOfClass:NSString.class] ? json[@"message"] : @"تعذر استعادة الهوية";
+        if (success && code.length) {
+            // Keep the new iPhone's real IDFV for server-side binding. Only the XsGpS-owned UUID moves.
+            self.installationUUID = previous;
+            [self.defaults setObject:previous forKey:kLSInstallationUUIDKey];
+            [self saveSuccessfulCode:code response:json];
+            if ([json[@"settings"] isKindOfClass:NSDictionary.class]) {
+                [LSIdentitySettings importSettings:json[@"settings"]];
+            }
+        }
+        if (completion) completion(success && code.length, message);
+    }];
 }
 
 - (void)activateCode:(NSString *)code completion:(LSActivationCompletion)completion {
