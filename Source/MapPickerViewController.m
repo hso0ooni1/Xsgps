@@ -813,7 +813,7 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
 - (void)identitySettingsTapped {
     NSString *uuid = [LSActivationManager shared].installationUUID;
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"هوية XsGpS"
-                                                                  message:[NSString stringWithFormat:@"معرف التطبيق الحالي:\\n%@", uuid]
+                                                                  message:[NSString stringWithFormat:@"معرف التطبيق الحالي:\n%@", uuid]
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     [menu addAction:[UIAlertAction actionWithTitle:@"نسخ معرف التطبيق" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         UIPasteboard.generalPasteboard.string = uuid;
@@ -847,7 +847,7 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
         }
         NSString *uuid = [LSActivationManager shared].installationUUID;
         NSString *transferText = [NSString stringWithFormat:@"%@|%@", uuid, transferCode];
-        NSString *details = [NSString stringWithFormat:@"معرف التطبيق:\\n%@\\n\\nرمز النقل المؤقت:\\n%@\\n\\nالرمز صالح لمدة ١٠ دقائق ويُستخدم مرة واحدة فقط.", uuid, transferCode];
+        NSString *details = [NSString stringWithFormat:@"معرف التطبيق:\n%@\n\nرمز النقل المؤقت:\n%@\n\nالرمز صالح لمدة ١٠ دقائق ويُستخدم مرة واحدة فقط.", uuid, transferCode];
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"بيانات نقل الهوية" message:details preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"نسخ بيانات النقل" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
             UIPasteboard.generalPasteboard.string = transferText;
