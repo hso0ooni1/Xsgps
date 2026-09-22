@@ -314,6 +314,16 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
     [close addTarget:self action:@selector(closeTapped) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:close];
 
+    UIButton *identityGear = [UIButton buttonWithType:UIButtonTypeSystem];
+    identityGear.translatesAutoresizingMaskIntoConstraints = NO;
+    [identityGear setImage:[UIImage systemImageNamed:@"gearshape.fill"] forState:UIControlStateNormal];
+    identityGear.tintColor = UIColor.whiteColor;
+    identityGear.backgroundColor = [UIColor colorWithWhite:1 alpha:0.08];
+    identityGear.layer.cornerRadius = 16.0;
+    identityGear.accessibilityLabel = @"إعدادات هوية التطبيق";
+    [identityGear addTarget:self action:@selector(identitySettingsTapped) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:identityGear];
+
     self.searchBar = [[UISearchBar alloc] init];
     self.searchBar.translatesAutoresizingMaskIntoConstraints = NO;
     self.searchBar.delegate = self;
@@ -416,11 +426,16 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
         [close.widthAnchor constraintEqualToConstant:34.0],
         [close.heightAnchor constraintEqualToConstant:34.0],
 
-        [self.statusLabel.trailingAnchor constraintEqualToAnchor:close.leadingAnchor constant:-10.0],
+        [identityGear.trailingAnchor constraintEqualToAnchor:close.leadingAnchor constant:-6.0],
+        [identityGear.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
+        [identityGear.widthAnchor constraintEqualToConstant:32.0],
+        [identityGear.heightAnchor constraintEqualToConstant:32.0],
+
+        [self.statusLabel.trailingAnchor constraintEqualToAnchor:identityGear.leadingAnchor constant:-5.0],
         [self.statusLabel.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
         [self.statusLabel.heightAnchor constraintEqualToConstant:28.0],
-        [self.statusLabel.widthAnchor constraintGreaterThanOrEqualToConstant:128.0],
-        [self.statusLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:brand.trailingAnchor constant:8.0],
+        [self.statusLabel.widthAnchor constraintEqualToConstant:72.0],
+        [self.statusLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:brand.trailingAnchor constant:4.0],
 
         [self.searchBar.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:7.0],
         [self.searchBar.leadingAnchor constraintEqualToAnchor:self.panel.leadingAnchor constant:14.0],
@@ -476,7 +491,7 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
 
 - (void)updateStatus {
     BOOL enabled = [PersistenceManager shared].isSpoofingEnabled && [LSActivationManager shared].isActivated;
-    self.statusLabel.text = enabled ? @"✓ تغيير الموقع مفعل" : @"✕ تغيير الموقع غير مفعل";
+    self.statusLabel.text = enabled ? @"✓ مفعل" : @"✕ متوقف";
     self.statusLabel.textColor = enabled ? [UIColor colorWithRed:0.35 green:1.0 blue:0.52 alpha:1.0] : [UIColor colorWithRed:1.0 green:0.34 blue:0.38 alpha:1.0];
     self.statusLabel.backgroundColor = enabled ? [UIColor colorWithRed:0.02 green:0.30 blue:0.12 alpha:0.55] : [UIColor colorWithRed:0.35 green:0.03 blue:0.07 alpha:0.58];
 }
@@ -793,6 +808,103 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
     if (!self.fetchingRealLocation) return;
     if (status == kCLAuthorizationStatusAuthorizedWhenInUse || status == kCLAuthorizationStatusAuthorizedAlways) [self beginFastRealLocationLookup];
     else if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) { self.fetchingRealLocation = NO; LSSetHooksBypassed(NO); }
+}
+
+- (void)identitySettingsTapped {
+    NSString *uuid = [LSActivationManager shared].installationUUID;
+    UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"هوية XsGpS"
+                                                                  message:[NSString stringWithFormat:@"معرف التطبيق الحالي:\\n%@", uuid]
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    [menu addAction:[UIAlertAction actionWithTitle:@"نسخ معرف التطبيق" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        UIPasteboard.generalPasteboard.string = uuid;
+        [self showIdentityMessage:@"تم نسخ معرف التطبيق"];
+    }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"إنشاء رمز نقل لجهاز جديد" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        [self prepareIdentityTransfer];
+    }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"كتابة معرف تطبيق سابق" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        [self confirmIdentityImport];
+    }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
+    if (menu.popoverPresentationController) {
+        menu.popoverPresentationController.sourceView = self.panel;
+        menu.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.panel.bounds), 38.0, 1.0, 1.0);
+    }
+    [self presentViewController:menu animated:YES completion:nil];
+}
+
+- (void)showIdentityMessage:(NSString *)message {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"XsGpS" message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"حسنًا" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)prepareIdentityTransfer {
+    [[LSActivationManager shared] prepareIdentityTransferWithCompletion:^(BOOL success, NSString *message, NSString *transferCode) {
+        if (!success || !transferCode.length) {
+            [self showIdentityMessage:message];
+            return;
+        }
+        NSString *uuid = [LSActivationManager shared].installationUUID;
+        NSString *transferText = [NSString stringWithFormat:@"%@|%@", uuid, transferCode];
+        NSString *details = [NSString stringWithFormat:@"معرف التطبيق:\\n%@\\n\\nرمز النقل المؤقت:\\n%@\\n\\nالرمز صالح لمدة ١٠ دقائق ويُستخدم مرة واحدة فقط.", uuid, transferCode];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"بيانات نقل الهوية" message:details preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"نسخ بيانات النقل" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+            UIPasteboard.generalPasteboard.string = transferText;
+        }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"إغلاق" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }];
+}
+
+- (void)confirmIdentityImport {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"استيراد هوية سابقة"
+                                                                 message:@"سيستبدل هذا الإجراء تفعيل وإعدادات XsGpS الحالية بعد التحقق برمز النقل المؤقت."
+                                                          preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"متابعة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        [self promptIdentityImport];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)promptIdentityImport {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"كتابة معرف التطبيق"
+                                                                 message:@"أدخل المعرف القديم ورمز النقل، أو الصق بيانات النقل كاملة في الحقل الأول."
+                                                          preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"UUID القديم أو بيانات النقل";
+        field.textAlignment = NSTextAlignmentLeft;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
+    }];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"رمز النقل المؤقت";
+        field.textAlignment = NSTextAlignmentLeft;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"استعادة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        NSString *uuid = alert.textFields.firstObject.text ?: @"";
+        NSString *token = alert.textFields.lastObject.text ?: @"";
+        NSArray<NSString *> *parts = [uuid componentsSeparatedByString:@"|"];
+        if (parts.count == 2 && token.length == 0) {
+            uuid = parts.firstObject;
+            token = parts.lastObject;
+        }
+        [[LSActivationManager shared] completeIdentityTransferFromUUID:uuid transferCode:token completion:^(BOOL success, NSString *message) {
+            if (success) {
+                PersistenceManager *prefs = [PersistenceManager shared];
+                CLLocationCoordinate2D coordinate = prefs.hasStoredCoordinate ? prefs.spoofCoordinate : self.selectedCoordinate;
+                [[LSSmoothRandomMovementManager shared] resetAnchorToCoordinate:coordinate];
+                [self movePinToCoordinate:coordinate name:@"الموقع المستعاد" animated:YES];
+                [self updateFromPersistence];
+            }
+            [self showIdentityMessage:message];
+        }];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)closeTapped {
