@@ -1,4 +1,5 @@
 #import "LSIdentitySettings.h"
+#import <math.h>
 #import "PersistenceManager.h"
 #import "BookmarksManager.h"
 #import "LSSmoothRandomMovementManager.h"
@@ -38,11 +39,34 @@ static NSString * const kBookmarksSuite = @"com.locationspoofer.dylib";
         [safeBookmarks addObject:bookmark];
         if (safeBookmarks.count == 50) break;
     }
-    return @{@"version": @1, @"preferences": numbers, @"bookmarks": safeBookmarks};
+    NSMutableDictionary *result = [@{@"version": @1, @"preferences": numbers,
+                                     @"bookmarks": safeBookmarks} mutableCopy];
+    NSArray *recent = [prefs arrayForKey:@"LSRecentLocations"];
+    if ([recent isKindOfClass:NSArray.class]) {
+        NSMutableArray *safeRecent = [NSMutableArray array];
+        for (id entry in recent) {
+            if (![entry isKindOfClass:NSDictionary.class]) continue;
+            NSNumber *lat = entry[@"LSRecentLat"];
+            NSNumber *lon = entry[@"LSRecentLon"];
+            if (![lat isKindOfClass:NSNumber.class] || ![lon isKindOfClass:NSNumber.class]) continue;
+            CLLocationCoordinate2D point = CLLocationCoordinate2DMake(lat.doubleValue, lon.doubleValue);
+            if (!CLLocationCoordinate2DIsValid(point)) continue;
+            NSString *name = [entry[@"LSRecentName"] isKindOfClass:NSString.class] ? entry[@"LSRecentName"] : @"موقع";
+            NSMutableDictionary *item = [@{@"LSRecentLat": lat, @"LSRecentLon": lon,
+                                             @"LSRecentName": [name substringToIndex:MIN(name.length, 120)]} mutableCopy];
+            if ([entry[@"LSRecentDate"] isKindOfClass:NSString.class]) item[@"LSRecentDate"] = entry[@"LSRecentDate"];
+            [safeRecent addObject:item];
+            if (safeRecent.count == 5) break;
+        }
+        result[@"recent_locations"] = safeRecent;
+    }
+    return result;
 }
 
 + (void)importSettings:(NSDictionary<NSString *, id> *)settings {
     if (![settings isKindOfClass:NSDictionary.class]) return;
+    // Cancel movement before replacing its previous coordinate and anchor.
+    [LSSmoothRandomMovementManager shared].enabled = NO;
     NSUserDefaults *prefs = [[NSUserDefaults alloc] initWithSuiteName:kPrefsSuite];
     NSDictionary *numbers = [settings[@"preferences"] isKindOfClass:NSDictionary.class] ? settings[@"preferences"] : @{};
     for (NSString *key in [self numericPreferenceKeys]) {
@@ -56,6 +80,23 @@ static NSString * const kBookmarksSuite = @"com.locationspoofer.dylib";
     [prefs setBool:NO forKey:@"spoof_enabled"];
     [prefs setBool:NO forKey:@"LSSmoothRandomEnabled"];
     [prefs setBool:NO forKey:@"LSFluctuationEnabled"];
+    NSArray *recent = [settings[@"recent_locations"] isKindOfClass:NSArray.class] ? settings[@"recent_locations"] : @[];
+    NSMutableArray *safeRecent = [NSMutableArray array];
+    for (id entry in recent) {
+        if (![entry isKindOfClass:NSDictionary.class]) continue;
+        NSNumber *lat = entry[@"LSRecentLat"];
+        NSNumber *lon = entry[@"LSRecentLon"];
+        if (![lat isKindOfClass:NSNumber.class] || ![lon isKindOfClass:NSNumber.class]) continue;
+        CLLocationCoordinate2D point = CLLocationCoordinate2DMake(lat.doubleValue, lon.doubleValue);
+        if (!CLLocationCoordinate2DIsValid(point)) continue;
+        NSString *name = [entry[@"LSRecentName"] isKindOfClass:NSString.class] ? entry[@"LSRecentName"] : @"موقع";
+        NSMutableDictionary *item = [@{@"LSRecentLat": lat, @"LSRecentLon": lon,
+                                         @"LSRecentName": [name substringToIndex:MIN(name.length, 120)]} mutableCopy];
+        if ([entry[@"LSRecentDate"] isKindOfClass:NSString.class]) item[@"LSRecentDate"] = entry[@"LSRecentDate"];
+        [safeRecent addObject:item];
+        if (safeRecent.count == 5) break;
+    }
+    [prefs setObject:safeRecent forKey:@"LSRecentLocations"];
     NSArray *saved = [settings[@"bookmarks"] isKindOfClass:NSArray.class] ? settings[@"bookmarks"] : @[];
     NSMutableArray *clean = [NSMutableArray array];
     for (id item in saved) {
