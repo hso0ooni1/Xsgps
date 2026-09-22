@@ -4,6 +4,7 @@
 @interface LSActivationViewController ()
 @property (nonatomic, strong) UITextField *codeField;
 @property (nonatomic, strong) UIButton *activateButton;
+@property (nonatomic, strong) UIButton *restoreButton;
 @property (nonatomic, strong) UILabel *messageLabel;
 @end
 
@@ -75,6 +76,16 @@
     [self.activateButton addTarget:self action:@selector(activateTapped) forControlEvents:UIControlEventTouchUpInside];
     [card addSubview:self.activateButton];
 
+    self.restoreButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    self.restoreButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.restoreButton setTitle:@"استعادة هوية التطبيق" forState:UIControlStateNormal];
+    [self.restoreButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    self.restoreButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+    self.restoreButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.10];
+    self.restoreButton.layer.cornerRadius = 12.0;
+    [self.restoreButton addTarget:self action:@selector(restoreIdentityTapped) forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:self.restoreButton];
+
     self.messageLabel = [[UILabel alloc] init];
     self.messageLabel.translatesAutoresizingMaskIntoConstraints = NO;
     self.messageLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
@@ -127,11 +138,59 @@
         [self.activateButton.trailingAnchor constraintEqualToAnchor:self.codeField.trailingAnchor],
         [self.activateButton.heightAnchor constraintEqualToConstant:46.0],
 
-        [self.messageLabel.topAnchor constraintEqualToAnchor:self.activateButton.bottomAnchor constant:14.0],
+        [self.restoreButton.topAnchor constraintEqualToAnchor:self.activateButton.bottomAnchor constant:9.0],
+        [self.restoreButton.leadingAnchor constraintEqualToAnchor:self.codeField.leadingAnchor],
+        [self.restoreButton.trailingAnchor constraintEqualToAnchor:self.codeField.trailingAnchor],
+        [self.restoreButton.heightAnchor constraintEqualToConstant:41.0],
+
+        [self.messageLabel.topAnchor constraintEqualToAnchor:self.restoreButton.bottomAnchor constant:12.0],
         [self.messageLabel.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:24.0],
         [self.messageLabel.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-24.0],
         [self.messageLabel.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-19.0],
     ]];
+}
+
+- (void)restoreIdentityTapped {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"استعادة هوية XsGpS"
+                                                                 message:@"انسخ بيانات النقل من الجهاز القديم أو أدخل UUID ورمز النقل المنفصل. الرمز صالح لمدة ١٠ دقائق."
+                                                          preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"UUID القديم أو بيانات النقل";
+        field.textAlignment = NSTextAlignmentLeft;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
+    }];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"رمز النقل (إذا لم تلصقه أعلاه)";
+        field.textAlignment = NSTextAlignmentLeft;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"استعادة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        NSString *uuid = alert.textFields.firstObject.text ?: @"";
+        NSString *token = alert.textFields.lastObject.text ?: @"";
+        NSArray *pieces = [uuid componentsSeparatedByString:@"|"];
+        if (pieces.count == 2 && token.length == 0) { uuid = pieces.firstObject; token = pieces.lastObject; }
+        self.restoreButton.enabled = NO;
+        self.messageLabel.text = @"جاري التحقق من ملكية الهوية...";
+        self.messageLabel.textColor = UIColor.whiteColor;
+        [[LSActivationManager shared] completeIdentityTransferFromUUID:uuid transferCode:token completion:^(BOOL success, NSString *message) {
+            self.restoreButton.enabled = YES;
+            self.messageLabel.text = message;
+            self.messageLabel.textColor = success ? [UIColor colorWithRed:0.28 green:0.92 blue:0.50 alpha:1] : [UIColor colorWithRed:1 green:0.40 blue:0.40 alpha:1];
+            if (success) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.55 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    void (^completion)(void) = self.activationSucceeded;
+                    [self dismissViewControllerAnimated:YES completion:completion];
+                });
+            }
+        }];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)activateTapped {
