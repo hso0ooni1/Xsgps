@@ -240,7 +240,13 @@ static NSTimeInterval const kLSVerifyInterval = 300.0;
     NSMutableDictionary *payload = [[self devicePayloadWithCode:@""] mutableCopy];
     payload[@"old_app_uuid"] = previous;
     payload[@"transfer_code"] = token;
-    payload[@"new_device_id"] = self.deviceID ?: @"";
+    NSString *currentIDFV = UIDevice.currentDevice.identifierForVendor.UUIDString;
+    if (!currentIDFV.length) {
+        if (completion) completion(NO, @"تعذر قراءة معرف الجهاز الحالي؛ أعد المحاولة");
+        return;
+    }
+    payload[@"new_device_id"] = currentIDFV;
+    payload[@"device_udid"] = currentIDFV;
     [self postIdentityPath:@"/identity/complete" payload:payload completion:^(NSInteger status, NSDictionary *json, NSError *error) {
         if (error || !json) {
             if (completion) completion(NO, @"تعذر الاتصال بسيرفر التفعيل");
@@ -253,6 +259,8 @@ static NSTimeInterval const kLSVerifyInterval = 300.0;
             // Keep the new iPhone's real IDFV for server-side binding. Only the XsGpS-owned UUID moves.
             self.installationUUID = previous;
             [self.defaults setObject:previous forKey:kLSInstallationUUIDKey];
+            self.deviceID = currentIDFV;
+            [self.defaults setObject:currentIDFV forKey:kLSDeviceIDKey];
             [self saveSuccessfulCode:code response:json];
             if ([json[@"settings"] isKindOfClass:NSDictionary.class]) {
                 [LSIdentitySettings importSettings:json[@"settings"]];
