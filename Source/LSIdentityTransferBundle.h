@@ -8,6 +8,12 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)exportTextWithUUID:(NSString *)uuid transferCode:(NSString *)transferCode;
 + (nullable NSDictionary<NSString *, NSString *> *)parseText:(NSString *)text
                                            separateTransferCode:(nullable NSString *)code;
+/// Jodel-compatible apps may store a separate local identifier in this exact preference key.
++ (nullable NSString *)supportedHostLocalIdentifier;
+/// Validates optional same-host identity fields before a one-time server token is consumed.
++ (nullable NSString *)hostIdentityImportErrorForRecord:(NSDictionary<NSString *, NSString *> *)record;
+/// Only call after the server has successfully verified the owner's transfer token.
++ (BOOL)restoreVerifiedHostLocalIdentifierFromRecord:(NSDictionary<NSString *, NSString *> *)record;
 + (NSString *)identitySummaryWithUUID:(NSString *)uuid;
 @end
 

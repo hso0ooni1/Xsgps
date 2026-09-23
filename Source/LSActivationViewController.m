@@ -180,6 +180,12 @@
             self.messageLabel.textColor = [UIColor colorWithRed:1 green:0.40 blue:0.40 alpha:1];
             return;
         }
+        NSString *hostError = [LSIdentityTransferBundle hostIdentityImportErrorForRecord:record];
+        if (hostError) {
+            self.messageLabel.text = hostError;
+            self.messageLabel.textColor = [UIColor colorWithRed:1 green:0.40 blue:0.40 alpha:1];
+            return;
+        }
         NSString *uuid = record[@"uuid"];
         NSString *token = record[@"token"];
         self.restoreButton.enabled = NO;
@@ -187,7 +193,14 @@
         self.messageLabel.textColor = UIColor.whiteColor;
         [[LSActivationManager shared] completeIdentityTransferFromUUID:uuid transferCode:token completion:^(BOOL success, NSString *message) {
             self.restoreButton.enabled = YES;
-            self.messageLabel.text = message;
+            NSString *result = message;
+            if (success && record[@"host_local_uuid"]) {
+                BOOL applied = [LSIdentityTransferBundle restoreVerifiedHostLocalIdentifierFromRecord:record];
+                result = [message stringByAppendingString:applied
+                    ? @" تم أيضًا استعادة UUID المحلي. قد تحتاج إلى إعادة فتح التطبيق."
+                    : @" استعيدت هوية XsGpS فقط؛ تعذر كتابة UUID المحلي."];
+            }
+            self.messageLabel.text = result;
             self.messageLabel.textColor = success ? [UIColor colorWithRed:0.28 green:0.92 blue:0.50 alpha:1] : [UIColor colorWithRed:1 green:0.40 blue:0.40 alpha:1];
             if (success) {
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.55 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{

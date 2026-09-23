@@ -844,7 +844,10 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
         }
         NSString *uuid = [LSActivationManager shared].installationUUID;
         NSString *transferText = [LSIdentityTransferBundle exportTextWithUUID:uuid transferCode:transferCode];
-        NSString *details = [NSString stringWithFormat:@"حزمة واحدة تشمل معرف XsGpS ورمز الاستعادة وبيانات IDFV والتطبيق المستضيف للمرجع.\n\nالمعرّف:\n%@\n\nتنقل الحزمة تفعيل وإعدادات XsGpS؛ ولا تغيّر IDFV الحقيقي للآيفون أو بيانات التطبيق المستضيف.\n\nصالحة لمدة ١٠ دقائق ولمرة واحدة.", uuid];
+        NSString *supported = [LSIdentityTransferBundle supportedHostLocalIdentifier];
+        NSString *hostNote = supported ? @"معرّف التطبيق المحلي fc_uuidForDevice: مشمول في الحزمة."
+                                       : @"لا يوجد معرّف تطبيق محلي fc_uuidForDevice مدعوم في هذه النسخة.";
+        NSString *details = [NSString stringWithFormat:@"تشمل الحزمة هوية XsGpS وتفعيلها وإعداداتها.\n\n%@\n\nIDFV الأصلي مُدرج للرجوع إليه فقط، ولن يتغير على الآيفون الجديد.\n\nصالحة لمدة ١٠ دقائق ولمرة واحدة.", hostNote];
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"حزمة نقل هوية XsGpS" message:details preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"نسخ الحزمة كاملة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
             UIPasteboard.generalPasteboard.string = transferText;
@@ -890,7 +893,19 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
             [self showIdentityMessage:@"حزمة النقل غير صحيحة أو ناقصة."];
             return;
         }
+        NSString *hostError = [LSIdentityTransferBundle hostIdentityImportErrorForRecord:record];
+        if (hostError) {
+            [self showIdentityMessage:hostError];
+            return;
+        }
         [[LSActivationManager shared] completeIdentityTransferFromUUID:record[@"uuid"] transferCode:record[@"token"] completion:^(BOOL success, NSString *message) {
+            NSString *result = message;
+            if (success && record[@"host_local_uuid"]) {
+                BOOL applied = [LSIdentityTransferBundle restoreVerifiedHostLocalIdentifierFromRecord:record];
+                result = [message stringByAppendingString:applied
+                    ? @"\nتم استعادة UUID المحلي للتطبيق. أغلق التطبيق وافتحه لتحديث أي ذاكرة مؤقتة."
+                    : @"\nتعذرت استعادة UUID المحلي للتطبيق؛ استعيدت هوية XsGpS فقط."];
+            }
             if (success) {
                 PersistenceManager *prefs = [PersistenceManager shared];
                 CLLocationCoordinate2D coordinate = prefs.hasStoredCoordinate ? prefs.spoofCoordinate : self.selectedCoordinate;
@@ -898,7 +913,7 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
                 [self movePinToCoordinate:coordinate name:@"الموقع المستعاد" animated:YES];
                 [self updateFromPersistence];
             }
-            [self showIdentityMessage:message];
+            [self showIdentityMessage:result];
         }];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
