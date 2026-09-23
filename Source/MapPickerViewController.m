@@ -3,6 +3,7 @@
 #import "BookmarksManager.h"
 #import "LocationSpoofer.h"
 #import "LSActivationManager.h"
+#import "LSIdentityTransferBundle.h"
 #import "OverlayWindow.h"
 #import "LSSmoothRandomMovementManager.h"
 
@@ -320,7 +321,7 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
     identityGear.tintColor = UIColor.whiteColor;
     identityGear.backgroundColor = [UIColor colorWithWhite:1 alpha:0.08];
     identityGear.layer.cornerRadius = 16.0;
-    identityGear.accessibilityLabel = @"إعدادات هوية التطبيق";
+    identityGear.accessibilityLabel = @"نقل هوية XsGpS";
     [identityGear addTarget:self action:@selector(identitySettingsTapped) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:identityGear];
 
@@ -812,17 +813,13 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
 
 - (void)identitySettingsTapped {
     NSString *uuid = [LSActivationManager shared].installationUUID;
-    UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"هوية XsGpS"
-                                                                  message:[NSString stringWithFormat:@"معرف التطبيق الحالي:\n%@", uuid]
+    UIAlertController *menu = [UIAlertController alertControllerWithTitle:@"نقل هوية XsGpS"
+                                                                  message:[LSIdentityTransferBundle identitySummaryWithUUID:uuid]
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-    [menu addAction:[UIAlertAction actionWithTitle:@"نسخ معرف التطبيق" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-        UIPasteboard.generalPasteboard.string = uuid;
-        [self showIdentityMessage:@"تم نسخ معرف التطبيق"];
-    }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"إنشاء رمز نقل لجهاز جديد" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+    [menu addAction:[UIAlertAction actionWithTitle:@"نسخ حزمة النقل" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         [self prepareIdentityTransfer];
     }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"كتابة معرف تطبيق سابق" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+    [menu addAction:[UIAlertAction actionWithTitle:@"كتابة حزمة النقل" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         [self confirmIdentityImport];
     }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
@@ -846,10 +843,10 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
             return;
         }
         NSString *uuid = [LSActivationManager shared].installationUUID;
-        NSString *transferText = [NSString stringWithFormat:@"%@|%@", uuid, transferCode];
-        NSString *details = [NSString stringWithFormat:@"معرف التطبيق:\n%@\n\nرمز النقل المؤقت:\n%@\n\nالرمز صالح لمدة ١٠ دقائق ويُستخدم مرة واحدة فقط.", uuid, transferCode];
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"بيانات نقل الهوية" message:details preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"نسخ بيانات النقل" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        NSString *transferText = [LSIdentityTransferBundle exportTextWithUUID:uuid transferCode:transferCode];
+        NSString *details = [NSString stringWithFormat:@"حزمة واحدة تشمل معرف XsGpS ورمز الاستعادة وبيانات IDFV والتطبيق المستضيف للمرجع.\n\nالمعرّف:\n%@\n\nتنقل الحزمة تفعيل وإعدادات XsGpS؛ ولا تغيّر IDFV الحقيقي للآيفون أو بيانات التطبيق المستضيف.\n\nصالحة لمدة ١٠ دقائق ولمرة واحدة.", uuid];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"حزمة نقل هوية XsGpS" message:details preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"نسخ الحزمة كاملة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
             UIPasteboard.generalPasteboard.string = transferText;
         }]];
         [alert addAction:[UIAlertAction actionWithTitle:@"إغلاق" style:UIAlertActionStyleCancel handler:nil]];
@@ -859,7 +856,7 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
 
 - (void)confirmIdentityImport {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"استيراد هوية سابقة"
-                                                                 message:@"سيستبدل هذا الإجراء تفعيل وإعدادات XsGpS الحالية بعد التحقق برمز النقل المؤقت."
+                                                                 message:@"استيراد الحزمة يستعيد تفعيل وإعدادات XsGpS بعد التحقق. يحتفظ الآيفون الجديد بهويته الأصلية."
                                                           preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"متابعة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
@@ -870,10 +867,10 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
 
 - (void)promptIdentityImport {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"كتابة معرف التطبيق"
-                                                                 message:@"أدخل المعرف القديم ورمز النقل، أو الصق بيانات النقل كاملة في الحقل الأول."
+                                                                 message:@"الصق حزمة النقل في الحقل الأول. يمكنك أيضًا إدخال UUID ورمز النقل القديمين."
                                                           preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-        field.placeholder = @"UUID القديم أو بيانات النقل";
+        field.placeholder = @"حزمة النقل أو UUID القديم";
         field.textAlignment = NSTextAlignmentLeft;
         field.autocorrectionType = UITextAutocorrectionTypeNo;
         field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
@@ -886,14 +883,14 @@ static NSString *LSSearchTextFromMapURL(NSURL *url) {
     }];
     [alert addAction:[UIAlertAction actionWithTitle:@"إلغاء" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"استعادة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-        NSString *uuid = alert.textFields.firstObject.text ?: @"";
-        NSString *token = alert.textFields.lastObject.text ?: @"";
-        NSArray<NSString *> *parts = [uuid componentsSeparatedByString:@"|"];
-        if (parts.count == 2 && token.length == 0) {
-            uuid = parts.firstObject;
-            token = parts.lastObject;
+        NSDictionary<NSString *, NSString *> *record =
+            [LSIdentityTransferBundle parseText:alert.textFields.firstObject.text
+                            separateTransferCode:alert.textFields.lastObject.text];
+        if (!record) {
+            [self showIdentityMessage:@"حزمة النقل غير صحيحة أو ناقصة."];
+            return;
         }
-        [[LSActivationManager shared] completeIdentityTransferFromUUID:uuid transferCode:token completion:^(BOOL success, NSString *message) {
+        [[LSActivationManager shared] completeIdentityTransferFromUUID:record[@"uuid"] transferCode:record[@"token"] completion:^(BOOL success, NSString *message) {
             if (success) {
                 PersistenceManager *prefs = [PersistenceManager shared];
                 CLLocationCoordinate2D coordinate = prefs.hasStoredCoordinate ? prefs.spoofCoordinate : self.selectedCoordinate;

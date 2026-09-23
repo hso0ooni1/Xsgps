@@ -1,5 +1,6 @@
 #import "LSActivationViewController.h"
 #import "LSActivationManager.h"
+#import "LSIdentityTransferBundle.h"
 
 @interface LSActivationViewController ()
 @property (nonatomic, strong) UITextField *codeField;
@@ -152,10 +153,10 @@
 
 - (void)restoreIdentityTapped {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"استعادة هوية XsGpS"
-                                                                 message:@"انسخ بيانات النقل من الجهاز القديم أو أدخل UUID ورمز النقل المنفصل. الرمز صالح لمدة ١٠ دقائق."
+                                                                 message:@"الصق حزمة نقل XsGpS من الجهاز القديم. تبقى هوية الآيفون الجديد الحقيقية كما هي."
                                                           preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-        field.placeholder = @"UUID القديم أو بيانات النقل";
+        field.placeholder = @"حزمة النقل أو UUID القديم";
         field.textAlignment = NSTextAlignmentLeft;
         field.autocorrectionType = UITextAutocorrectionTypeNo;
         field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
@@ -171,10 +172,16 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"استعادة" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
-        NSString *uuid = alert.textFields.firstObject.text ?: @"";
-        NSString *token = alert.textFields.lastObject.text ?: @"";
-        NSArray *pieces = [uuid componentsSeparatedByString:@"|"];
-        if (pieces.count == 2 && token.length == 0) { uuid = pieces.firstObject; token = pieces.lastObject; }
+        NSDictionary<NSString *, NSString *> *record =
+            [LSIdentityTransferBundle parseText:alert.textFields.firstObject.text
+                            separateTransferCode:alert.textFields.lastObject.text];
+        if (!record) {
+            self.messageLabel.text = @"حزمة النقل غير صحيحة أو ناقصة.";
+            self.messageLabel.textColor = [UIColor colorWithRed:1 green:0.40 blue:0.40 alpha:1];
+            return;
+        }
+        NSString *uuid = record[@"uuid"];
+        NSString *token = record[@"token"];
         self.restoreButton.enabled = NO;
         self.messageLabel.text = @"جاري التحقق من ملكية الهوية...";
         self.messageLabel.textColor = UIColor.whiteColor;
