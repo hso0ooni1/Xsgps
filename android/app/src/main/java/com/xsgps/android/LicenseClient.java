@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -71,7 +72,11 @@ final class LicenseClient {
                 InputStream input=conn.getResponseCode()<400?conn.getInputStream():conn.getErrorStream();
                 String response="";
                 if(input!=null) {
-                    try(InputStream stream=input){response=new String(stream.readAllBytes(),StandardCharsets.UTF_8);}
+                    try(InputStream stream=input; ByteArrayOutputStream buffer=new ByteArrayOutputStream()) {
+                        byte[] bytes=new byte[4096];int n;
+                        while((n=stream.read(bytes))!=-1)buffer.write(bytes,0,n);
+                        response=new String(buffer.toByteArray(),StandardCharsets.UTF_8);
+                    }
                 }
                 JSONObject json=new JSONObject(response);
                 ok=conn.getResponseCode()==200 && json.optBoolean("ok",false);
