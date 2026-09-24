@@ -1,0 +1,27 @@
+<!doctype html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body,#map{margin:0;width:100%;height:100%;background:#07131d}
+.banner{position:absolute;top:12px;right:12px;left:12px;z-index:900;
+background:#102b3d;color:#fff;border-radius:12px;padding:12px;
+font:14px sans-serif;text-align:center;box-shadow:0 3px 15px #0004}
+</style></head><body>
+<div id="map"></div><div class="banner" id="hint">اضغط أي مكان على الخريطة لتحديد الموقع</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+try {
+const q=new URLSearchParams(location.search);
+let lat=parseFloat(q.get('lat')||'24.7136'),lon=parseFloat(q.get('lon')||'46.6753');
+if(!Number.isFinite(lat)||!Number.isFinite(lon)){lat=24.7136;lon=46.6753;}
+const map=L.map('map').setView([lat,lon],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+const marker=L.marker([lat,lon]).addTo(map);
+map.on('click',e=>{
+lat=e.latlng.lat;lon=e.latlng.lng;
+marker.setLatLng(e.latlng);
+document.getElementById('hint').textContent=lat.toFixed(7)+' , '+lon.toFixed(7);
+location.href='xsgps://pick?lat='+lat.toFixed(7)+'&lon='+lon.toFixed(7);
+});
+}catch(err){document.getElementById('hint').textContent='تعذر تحميل الخريطة. تأكد من اتصال الإنترنت.';}
+</script></body></html>
