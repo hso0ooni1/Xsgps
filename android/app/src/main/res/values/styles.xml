@@ -1,0 +1,10 @@
+<resources>
+  <style name="Theme.XsGPS" parent="android:style/Theme.Material.NoActionBar">
+    <item name="android:fontFamily">sans</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:statusBarColor">#07131D</item>
+    <item name="android:navigationBarColor">#07131D</item>
+    <item name="android:colorAccent">#40CEB3</item>
+    <item name="android:windowBackground">#07131D</item>
+  </style>
+</resources>
