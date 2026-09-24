@@ -1,0 +1,46 @@
+name: Build XsGPS embedded AAR
+on:
+  push:
+    paths:
+      - 'android/xsgpslib/**'
+      - 'android/settings.gradle'
+      - '.github/workflows/build-embed-aar.yml'
+  workflow_dispatch:
+jobs:
+  aar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile SDK
+        run: |
+          cd android
+          gradle --no-daemon :xsgpslib:assembleRelease
+          mkdir -p ../artifact
+          cp xsgpslib/build/outputs/aar/*.aar ../artifact/xsgpslib-release.aar
+          cp xsgpslib/README.md ../artifact/README_AR.md
+          unzip -t ../artifact/xsgpslib-release.aar
+          sha256sum ../artifact/xsgpslib-release.aar
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: XsGPS-Embeddable-AAR
+          path: artifact/
+          if-no-files-found: error
