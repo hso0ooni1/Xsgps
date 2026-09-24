@@ -22,7 +22,7 @@ input[type=checkbox]{accent-color:#47d6b3;width:19px;height:19px;flex:none}.cons
     <span class="drop-icon">⇧</span>
     <strong id="filename">اختر ملف APK أو XAPK</strong>
     <span id="fileinfo">اضغط هنا لرفع الملف من جوالك، أو اسحبه للمربع<br>APK حتى 140MB · XAPK حتى 512MB</span>
-    <input id="apk" type="file" accept=".apk,.xapk,application/vnd.android.package-archive,application/zip">
+    <input id="apk" type="file">
   </label>
   <label class="consent" style="display:block">رمز الدخول <input id="secret" type="password" autocomplete="off" placeholder="أدخل رمز البناء" style="display:block;width:100%;padding:14px;margin:10px 0 0;border:1px solid #579c99;border-radius:12px;color:#fff;background:#092433;font-size:16px"></label>
   <label class="consent"><input type="checkbox" id="authorized"><span>أؤكد أن هذه نسخة <b>Debug</b> من تطبيق أملكه أو أملك تصريحًا بتعديلها، وأفهم أن الناتج سيوقّع بتوقيع اختبار جديد وقد يتطلب حذف النسخة القديمة.</span></label>
@@ -40,7 +40,35 @@ input[type=checkbox]{accent-color:#47d6b3;width:19px;height:19px;flex:none}.cons
 const input=document.getElementById('apk'), drop=document.getElementById('drop'), consent=document.getElementById('authorized'), go=document.getElementById('build'), status=document.getElementById('status'), state=document.getElementById('state'), detail=document.getElementById('detail'), progress=document.getElementById('progress'), result=document.getElementById('result'), download=document.getElementById('download');
 let selected=null,working=false, poller=null;
 function refresh(){go.disabled=working||!selected||!consent.checked;}
-function choose(file){selected=null;if(!file||!(/\.(apk|xapk)$/i.test(file.name))){document.getElementById('filename').textContent='اختر ملف APK أو XAPK صحيح';refresh();return;}if(file.size>(/\.xapk$/i.test(file.name)?512:140)*1024*1024){document.getElementById('filename').textContent='الملف أكبر من 140MB';refresh();return;}selected=file;document.getElementById('filename').textContent=file.name;document.getElementById('fileinfo').textContent=(file.size/1024/1024).toFixed(1)+' ميجابايت • جاهز للرفع';refresh();}
+let selectionVersion=0;
+async function choose(file){
+  const thisSelection=++selectionVersion;
+  selected=null;
+  result.style.display='none';
+  const filename=document.getElementById('filename'),info=document.getElementById('fileinfo');
+  refresh();
+  if(!file){filename.textContent='اختر ملف APK أو XAPK';info.textContent='تقدر تستعرض جميع الملفات؛ الموقع يفحص النوع بعد الاختيار';return;}
+  filename.textContent=file.name;
+  const match=/\.(apk|xapk)$/i.exec(file.name);
+  if(!match){info.textContent='الملف غير مدعوم. اختر APK أو XAPK';return;}
+  const format=match[1].toUpperCase();
+  const limit=format==='XAPK'?512:140;
+  if(file.size>limit*1024*1024){info.textContent='حجم '+format+' تجاوز الحد المسموح ('+limit+' MB)';return;}
+  info.textContent='جارٍ التأكد من سلامة '+format+'…';
+  try{
+    const head=new Uint8Array(await file.slice(0,4).arrayBuffer());
+    if(thisSelection!==selectionVersion)return;
+    if(head.length!==4||head[0]!==80||head[1]!==75||head[2]!==3||head[3]!==4){
+      info.textContent='الملف لا يحتوي حزمة APK/XAPK صالحة';
+      return;
+    }
+    selected=file;
+    info.textContent='تم التعرف على '+format+' • '+(file.size/1024/1024).toFixed(1)+' ميجابايت • جاهز للرفع';
+  }catch(e){
+    if(thisSelection===selectionVersion)info.textContent='تعذّر قراءة الملف؛ نزّله على الجهاز ثم حاول مجددًا';
+  }
+  refresh();
+}
 input.addEventListener('change',()=>choose(input.files?.[0]));consent.addEventListener('change',refresh);
 ['dragenter','dragover'].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.add('drag')}));['dragleave','drop'].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove('drag')}));drop.addEventListener('drop',e=>choose(e.dataTransfer.files?.[0]));
 function display(title,desc,mode){status.className='status show'+(mode?' '+mode:'');state.textContent=title;detail.textContent=desc||'';}
