@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!.dockerignore
+!builder/
+!builder/**
+!android/
+!android/build.gradle
+!android/settings.gradle
+!android/gradle.properties
+!android/xsgpslib/
+!android/xsgpslib/**
+**/.gradle/
+**/build/
