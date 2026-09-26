@@ -238,12 +238,14 @@ def integrate(base, output, work):
     if apk_info(base)[1]:
         raise ValueError("هذا Split APK؛ ارفع حزمة XAPK الكاملة")
     decoded, built = work / "decoded", work / "built.apk"
+    framework = work / "framework"
+    framework.mkdir(exist_ok=True)
     # Keep host DEX byte-for-byte; only decode resources and manifest.
-    run("java", "-jar", "/opt/apktool.jar", "d", "-f", "-s", base, "-o", decoded, timeout=240)
+    run("java", "-jar", "/opt/apktool.jar", "d", "-f", "-s", "-p", framework, base, "-o", decoded, timeout=240)
     configure_manifest(decoded)
     (decoded / "assets").mkdir(exist_ok=True)
     shutil.copyfile(LIB_MAP, decoded / "assets" / "xsgps_map.html")
-    run("java", "-jar", "/opt/apktool.jar", "b", decoded, "-o", built, timeout=300)
+    run("java", "-jar", "/opt/apktool.jar", "b", "-p", framework, decoded, "-o", built, timeout=300)
     with zipfile.ZipFile(built, "a") as z:
         nums = [int(m.group(1) or 1) for name in z.namelist()
                 if (m := re.fullmatch(r"classes(\d*)\.dex", name))]
