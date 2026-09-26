@@ -1,0 +1,47 @@
+name: Verify APK and XAPK builder
+on:
+  push:
+    branches: ['feature/apk-xapk-builder']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit and API tests
+        run: |
+          pip install -r builder/requirements.txt pytest httpx
+          python -m pytest builder/tests/test_builder.py -q
+      - name: Build Android tooling and library
+        run: docker build --target sdk -t xsgps-sdk -f builder/Dockerfile .
+      - name: Compile own sample and split fixture
+        run: |
+          docker run --name fixture xsgps-sdk gradle --no-daemon -p /src/android :app:assembleDebug
+          mkdir -p fixtures
+          docker cp fixture:/src/android/app/build/outputs/apk/debug/app-debug.apk fixtures/input.apk
+          cat > fixtures/split.xml <<'XML'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.xsgps.android" android:versionCode="1" android:versionName="0.1-beta" split="config.en"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34"/><application android:hasCode="false"/></manifest>
+          XML
+          docker run --rm -v "$PWD/fixtures:/fixtures" xsgps-sdk /opt/android-sdk/build-tools/35.0.0/aapt2 link --manifest /fixtures/split.xml -I /opt/android-sdk/platforms/android-35/android.jar -o /fixtures/config.apk
+      - name: Build runtime from readable source
+        run: docker build -t xsgps-builder -f builder/Dockerfile .
+      - name: Real APK and split XAPK integration
+        run: docker run --rm -v "$PWD/fixtures:/fixtures:ro" -v "$PWD/builder/tests:/tests:ro" xsgps-builder python /tests/integration.py
+      - name: Verify web health and source
+        run: |
+          docker run -d --name xsgps -p 8080:8080 -e BUILDER_PASSWORD=ci-only xsgps-builder
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://localhost:8080/api/health; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/health | python -c "import json,sys; assert json.load(sys.stdin)['ok']"
+          curl -fsS http://localhost:8080/ | grep 'دمج XS GPS'
+      - name: Logs on failure
+        if: failure()
+        run: docker logs xsgps || true

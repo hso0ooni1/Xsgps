@@ -1,80 +1,62 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#071522">
-<title>XsGPS — APK Builder</title>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1525"><title>XS GPS · دمج التطبيقات</title>
 <style>
-:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,sans-serif;color:#eafffa;background:#071522;--a:#3edcbe;--line:#255363;--muted:#a0bdc4}
-*{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 85% 0,#164b50 0,transparent 42%),#071522}main{max-width:650px;margin:auto;padding:22px 16px 48px}
-.brand{display:flex;align-items:center;justify-content:space-between;gap:10px}.mark{display:grid;place-items:center;width:55px;height:55px;border-radius:17px;color:#061824;background:linear-gradient(140deg,#75ffcc,#39bfc9);font-size:21px;font-weight:950;box-shadow:0 4px 24px #21cfa13b}.brand-name{margin:0;font-size:24px;font-weight:900}.sub{color:var(--muted);font-size:13px;margin-top:5px}.chip{background:#14443c;border:1px solid #2d8875;color:#79f1cc;font-size:12px;border-radius:30px;padding:6px 10px;white-space:nowrap}
-h1{font-size:clamp(28px,6vw,40px);letter-spacing:-.8px;line-height:1.28;margin:40px 0 12px}h1 em{font-style:normal;color:var(--a)}p{color:var(--muted);line-height:1.95;font-size:15px}.panel{background:linear-gradient(160deg,#123045,#0e2637);border:1px solid #315264;box-shadow:0 14px 38px #0003;border-radius:24px;padding:22px;margin-top:25px}.drop{border:1.5px dashed #579c99;border-radius:19px;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:23px;cursor:pointer;background:#0c263588;transition:.16s}.drop:hover,.drop.drag{border-color:#75ffcc;background:#13463b}.drop input{display:none}.drop-icon{height:62px;width:62px;display:grid;place-items:center;border-radius:18px;background:#1b5b56;color:#84ffde;font-size:34px}.drop strong{font-size:17px}.drop span{font-size:13px;color:var(--muted);line-height:1.8;overflow-wrap:anywhere}
-input[type=checkbox]{accent-color:#47d6b3;width:19px;height:19px;flex:none}.consent{display:flex;gap:10px;align-items:flex-start;color:#c1dee0;font-size:14px;line-height:1.8;margin-top:20px}.btn{border:0;border-radius:13px;padding:16px 18px;min-height:55px;font-size:16px;font-weight:850;width:100%;cursor:pointer;background:linear-gradient(115deg,#6bf1bb,#38cbd1);color:#062431;box-shadow:0 8px 30px #2beabb27}.btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}.btn.secondary{background:#1b4350;color:#c9fff2;box-shadow:none;text-decoration:none;display:block;text-align:center}.actions{margin-top:20px;display:grid;gap:10px}.status{margin-top:20px;padding:15px;border-radius:15px;background:#0a2631;border:1px solid #315464;display:none}.status.show{display:block}.status strong{display:block;font-size:15px}.status small{color:var(--muted);line-height:2}.progress{background:#20434c;height:8px;margin:12px 0;border-radius:20px;overflow:hidden}.progress b{height:100%;width:10%;display:block;background:linear-gradient(90deg,#65edba,#43bfcf);border-radius:20px;animation:move 1.5s infinite alternate}@keyframes move{to{transform:translateX(-30%)}}.result{display:none;margin-top:12px}.result a{margin-bottom:8px}.result code{font-size:11px;overflow-wrap:anywhere;color:#a6d9d2}.note{margin-top:23px;color:#9cbbc4;font-size:13px;line-height:2;padding:16px;border-right:3px solid #46bfac;background:#0d2938;border-radius:12px}.note strong{color:#d9fff4}.foot{text-align:center;font-size:12px;color:#7499a7;margin:24px 0}.error{color:#ffb8a6!important}.status.success{border-color:#368e75}.status.failed{border-color:#c36b60}
-</style>
-</head>
-<body><main>
-<header class="brand"><div style="display:flex;align-items:center;gap:12px"><div class="mark">XS</div><div><div class="brand-name">XsGPS <span style="color:#50e2bf">Builder</span></div><div class="sub">بوابة دمج المكتبة — نسخة المطورين</div></div></div><span class="chip">Android</span></header>
-<h1>ارفع APK أو XAPK،<br><em>واستلم نسخة تجريبية مدمجة</em></h1>
-<p>أداة ويب لدمج زر GPS العائم داخل <b>نسخة Debug من تطبيق تملك حق تعديلها</b>. تعمل عن طريق سيرفر بناء على Railway مع دعم APK وXAPK.</p>
-<section class="panel">
-  <label class="drop" id="drop" for="apk">
-    <span class="drop-icon">⇧</span>
-    <strong id="filename">اختر ملف APK أو XAPK</strong>
-    <span id="fileinfo">اضغط هنا لرفع الملف من جوالك، أو اسحبه للمربع<br>APK حتى 140MB · XAPK حتى 512MB</span>
-    <input id="apk" type="file">
-  </label>
-  <label class="consent" style="display:block">رمز الدخول <input id="secret" type="password" autocomplete="off" placeholder="أدخل رمز البناء" style="display:block;width:100%;padding:14px;margin:10px 0 0;border:1px solid #579c99;border-radius:12px;color:#fff;background:#092433;font-size:16px"></label>
-  <label class="consent"><input type="checkbox" id="authorized"><span>أؤكد أن هذه نسخة <b>Debug</b> من تطبيق أملكه أو أملك تصريحًا بتعديلها، وأفهم أن الناتج سيوقّع بتوقيع اختبار جديد وقد يتطلب حذف النسخة القديمة.</span></label>
-  <div class="actions"><button class="btn" id="build" disabled>دمج XsGPS وإنتاج الملف</button></div>
-  <div class="status" id="status" role="status" aria-live="polite">
-    <strong id="state">جاري المعالجة…</strong><small id="detail"></small><div class="progress" id="progress"><b></b></div>
-    <div class="result" id="result"><a class="btn secondary" id="download" href="#" download="XsGPS-integrated-debug.apk">↓ تحميل الملف المدمج</a><small id="checksum"></small></div>
-  </div>
-</section>
-<div class="note"><strong>مهم:</strong> يدعم XAPK مع Split APK وOBB لنسخ Debug المصرح بتعديلها. لا يدعم التطبيقات المحمية من تعديل التوقيع. تستخدم المكتبة Mock Location الرسمي؛ لا تخفيه عن التطبيقات ولا تتجاوز Play Integrity. الملفات تُحذف بعد ساعة من إنشاء المهمة؛ احتفظ برمز البناء خاصًا.</div>
-<div class="foot">XsGPS · Authorized debug builds only · No root</div>
-</main>
+:root{font-family:Tahoma,Arial,sans-serif;color:#edf7ff;background:#0b1525;color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#173b4c,transparent 65%);min-height:100dvh}main{max-width:600px;margin:auto;padding:38px 20px}header{display:flex;align-items:center;gap:14px;margin-bottom:40px}.logo{display:grid;place-items:center;background:#67ebc5;color:#092d29;font-weight:900;border-radius:17px;width:58px;height:58px;font-size:22px}h1{margin:0;font-size:29px}header p{margin:7px 0 0;color:#a5b9cc;font-size:14px}.card{background:#112236;border:1px solid #294055;border-radius:24px;padding:24px}label{display:block;font-size:14px;color:#b5c9da}input[type=password]{width:100%;padding:14px;border-radius:12px;border:1px solid #395269;background:#0a1929;font-size:16px;margin:9px 0 23px}.drop{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;border:1px dashed #5e928f;min-height:185px;border-radius:18px;padding:22px;text-align:center;cursor:pointer;background:#102c38}.drop:focus-within,.drop.drag{outline:2px solid #67ebc5}.drop strong{font-size:18px;color:#f1fffb;overflow-wrap:anywhere}.drop small{color:#a7c6cd;line-height:1.8}.icon{font-size:34px;color:#67ebc5}.drop input{position:absolute;width:1px;height:1px;opacity:0}button,.download{border:0;border-radius:13px;padding:16px;width:100%;font-size:17px;font-weight:700;cursor:pointer;background:#67ebc5;color:#092b26;margin-top:20px;text-align:center;text-decoration:none;display:block}button:disabled{opacity:.4;cursor:default}.muted{font-size:12px;color:#9eb5c7;line-height:1.9;margin:18px 0 0}#status{margin-top:24px;border-top:1px solid #294055;padding-top:20px}#status[hidden],.download[hidden]{display:none}#detail{font-size:13px;color:#b6cddb;line-height:1.8;overflow-wrap:anywhere;white-space:pre-wrap}progress{width:100%;height:7px;accent-color:#67ebc5;margin:14px 0}#status.error strong{color:#ffb4ad}#status.done strong{color:#67ebc5}#checksum{display:block;direction:ltr;overflow-wrap:anywhere;font-size:10px;color:#99afc3;line-height:1.8;margin-top:12px}.foot{text-align:center;font-size:12px;color:#809aad;margin:23px 0}button:focus-visible,a:focus-visible{outline:3px solid white;outline-offset:4px}
+</style></head><body><main>
+<header><div class="logo">XS</div><div><h1 dir="ltr">XS GPS</h1><p>دمج الأداة داخل تطبيقك</p></div></header>
+<div class="card"><label for="secret">رمز الدخول</label><input id="secret" type="password" autocomplete="off" placeholder="رمز الدخول الخاص بك">
+<label class="drop" id="drop"><span class="icon">↑</span><strong id="filename">اختر التطبيق</strong><small id="fileinfo">APK حتى 140 MB · XAPK حتى 512 MB</small><input id="file" type="file" aria-label="اختيار ملف APK أو XAPK"></label>
+<button id="build" disabled>دمج XS GPS</button>
+<p class="muted">للتطبيقات التي تملك صلاحية تعديلها. الناتج بتوقيع جديد، ويعمل على أندرويد 8 فأحدث. لتغيير الموقع اختر التطبيق الناتج من إعداد «تطبيق الموقع التجريبي».</p>
+<section id="status" hidden aria-live="polite"><strong id="state"></strong><p id="detail"></p><progress id="progress"></progress><a id="download" class="download" hidden>تحميل التطبيق المدمج</a><small id="checksum"></small></section>
+</div><p class="foot">APK / XAPK · ملفات الناتج متاحة لمدة ساعة</p></main>
 <script>
 (()=>{
-const input=document.getElementById('apk'), drop=document.getElementById('drop'), consent=document.getElementById('authorized'), go=document.getElementById('build'), status=document.getElementById('status'), state=document.getElementById('state'), detail=document.getElementById('detail'), progress=document.getElementById('progress'), result=document.getElementById('result'), download=document.getElementById('download');
-let selected=null,working=false, poller=null;
-function refresh(){go.disabled=working||!selected||!consent.checked;}
-let selectionVersion=0;
+const $=id=>document.getElementById(id),input=$('file'),button=$('build'),key=$('secret');
+let selected=null,busy=false,selection=0;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function refresh(){button.disabled=busy||!selected||!key.value.trim();input.disabled=busy;key.disabled=busy;}
+function show(title,detail='',mode=''){ $('status').hidden=false;$('status').className=mode;$('state').textContent=title;$('detail').textContent=detail;}
 async function choose(file){
-  const thisSelection=++selectionVersion;
-  selected=null;
-  result.style.display='none';
-  const filename=document.getElementById('filename'),info=document.getElementById('fileinfo');
-  refresh();
-  if(!file){filename.textContent='اختر ملف APK أو XAPK';info.textContent='تقدر تستعرض جميع الملفات؛ الموقع يفحص النوع بعد الاختيار';return;}
-  filename.textContent=file.name;
-  const match=/\.(apk|xapk)$/i.exec(file.name);
-  if(!match){info.textContent='الملف غير مدعوم. اختر APK أو XAPK';return;}
-  const format=match[1].toUpperCase();
-  const limit=format==='XAPK'?512:140;
-  if(file.size>limit*1024*1024){info.textContent='حجم '+format+' تجاوز الحد المسموح ('+limit+' MB)';return;}
-  info.textContent='جارٍ التأكد من سلامة '+format+'…';
-  try{
-    const head=new Uint8Array(await file.slice(0,4).arrayBuffer());
-    if(thisSelection!==selectionVersion)return;
-    if(head.length!==4||head[0]!==80||head[1]!==75||head[2]!==3||head[3]!==4){
-      info.textContent='الملف لا يحتوي حزمة APK/XAPK صالحة';
-      return;
-    }
-    selected=file;
-    info.textContent='تم التعرف على '+format+' • '+(file.size/1024/1024).toFixed(1)+' ميجابايت • جاهز للرفع';
-  }catch(e){
-    if(thisSelection===selectionVersion)info.textContent='تعذّر قراءة الملف؛ نزّله على الجهاز ثم حاول مجددًا';
-  }
-  refresh();
+ if(busy)return;const version=++selection;selected=null;refresh();$('download').hidden=true;$('checksum').textContent='';
+ if(!file)return;$('filename').textContent=file.name;
+ const match=/\.(apk|xapk)$/i.exec(file.name);
+ if(!match){$('fileinfo').textContent='اختر ملف APK أو XAPK';return;}
+ const max=match[1].toLowerCase()==='apk'?140:512;
+ if(file.size>max*1024*1024||file.size<1024){$('fileinfo').textContent='حجم الملف غير صالح (الحد '+max+' MB)';return;}
+ try{const bytes=new Uint8Array(await file.slice(0,4).arrayBuffer());if(version!==selection)return;
+ if(bytes[0]!==80||bytes[1]!==75||bytes[2]!==3||bytes[3]!==4)throw Error();
+ selected=file;$('fileinfo').textContent=(file.size/1024/1024).toFixed(1)+' MB · جاهز للدمج';
+ }catch(e){$('fileinfo').textContent='تعذر قراءة الحزمة؛ نزّل الملف كاملًا ثم اختره';}refresh();
 }
-input.addEventListener('change',()=>choose(input.files?.[0]));consent.addEventListener('change',refresh);
-['dragenter','dragover'].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.add('drag')}));['dragleave','drop'].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove('drag')}));drop.addEventListener('drop',e=>choose(e.dataTransfer.files?.[0]));
-function display(title,desc,mode){status.className='status show'+(mode?' '+mode:'');state.textContent=title;detail.textContent=desc||'';}
-function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
-async function monitor(id){let attempts=0;while(attempts++<250){await wait(2500);let response=await fetch('/api/status/'+encodeURIComponent(id),{cache:'no-store',headers:{'X-Builder-Key':document.getElementById('secret').value}});if(!response.ok)throw new Error('تعذر متابعة مهمة البناء.');const data=await response.json();display(data.state==='done'?'اكتمل الدمج':data.state==='failed'?'تعذّر دمج التطبيق':'جارٍ البناء',data.message,data.state==='failed'?'failed':data.state==='done'?'success':'');if(data.state==='failed'){progress.hidden=true;return;}if(data.state==='done'){progress.hidden=true;result.style.display='block';download.href='#';download.download=data.output_name||'XsGPS-integrated.apk';download.onclick=async e=>{e.preventDefault();const r=await fetch('/api/download/'+encodeURIComponent(id),{headers:{'X-Builder-Key':document.getElementById('secret').value}});if(!r.ok){display('تعذر التنزيل','تحقق من رمز الدخول وحاول مجددًا','failed');return;}const url=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=url;a.download=download.download;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);};document.getElementById('checksum').textContent='SHA256: '+data.sha256;return;}}throw new Error('انتهت مهلة المتابعة. حاول فتح الصفحة مجددًا.');}
-go.addEventListener('click',async()=>{if(!selected||!consent.checked||working)return;if(location.protocol==='file:'){display('تشغيل السيرفر مطلوب','هذه واجهة HTML فقط. ارفع المشروع على Railway لتفعيل سيرفر البناء.','failed');return;}working=true;refresh();result.style.display='none';progress.hidden=false;display('جارٍ رفع الملف…','انتظر، قد يحتاج بناء APK إلى عدة دقائق.');try{const body=new FormData();body.append('file',selected,selected.name);body.append('authorized','true');const response=await fetch('/api/build',{method:'POST',body,headers:{'X-Builder-Key':document.getElementById('secret').value}});let data=await response.json();if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'تعذر رفع الملف.');await monitor(data.job);}catch(e){display('تعذّر إكمال العملية',e.message||'جرّب مجددًا','failed');progress.hidden=true;}finally{working=false;refresh();}});
+input.onchange=()=>choose(input.files[0]);key.oninput=refresh;
+for(const name of ['dragover','dragenter'])$('drop').addEventListener(name,e=>{e.preventDefault();if(!busy)$('drop').classList.add('drag')});
+for(const name of ['dragleave','drop'])$('drop').addEventListener(name,e=>{e.preventDefault();$('drop').classList.remove('drag')});
+$('drop').addEventListener('drop',e=>choose(e.dataTransfer.files[0]));
+async function message(response){try{const data=await response.json();return typeof data.detail==='string'?data.detail:'تعذر تنفيذ الطلب';}catch(e){return 'تعذر الاتصال بالسيرفر ('+response.status+')';}}
+function upload(file,secret){return new Promise((resolve,reject)=>{
+ const xhr=new XMLHttpRequest();xhr.open('POST','/api/build');xhr.setRequestHeader('X-Builder-Key',secret);xhr.timeout=900000;
+ xhr.upload.onprogress=e=>{if(e.lengthComputable){$('progress').max=100;$('progress').value=e.loaded/e.total*100;show('جارٍ رفع التطبيق',Math.round(e.loaded/e.total*100)+'٪');}};
+ xhr.onload=()=>{let d;try{d=JSON.parse(xhr.responseText)}catch(e){reject(Error('استجابة غير صالحة من السيرفر'));return;}
+ xhr.status>=200&&xhr.status<300?resolve(d):reject(Error(typeof d.detail==='string'?d.detail:'تعذر رفع الملف ('+xhr.status+')'));};
+ xhr.onerror=()=>reject(Error('انقطع الاتصال أثناء الرفع'));xhr.ontimeout=()=>reject(Error('انتهت مهلة رفع الملف'));
+ const body=new FormData();body.append('file',file,file.name);xhr.send(body);
+});}
+async function monitor(job,secret){
+ $('progress').removeAttribute('value');let errors=0;
+ for(;;){await sleep(2500);let r;
+ try{r=await fetch('/api/status/'+encodeURIComponent(job),{headers:{'X-Builder-Key':secret},cache:'no-store'});}catch(e){if(++errors<12){show('بانتظار الاتصال','مهمة البناء مستمرة على السيرفر');continue;}throw Error('تعذر الاتصال؛ أعد فتح الصفحة وأدخل الرمز لمتابعة المهمة');}
+ if(!r.ok){if(r.status===404)sessionStorage.removeItem('xsgps-job');throw Error(await message(r));}
+ errors=0;const d=await r.json();show(d.state==='done'?'الملف جاهز':d.state==='failed'?'تعذر الدمج':'جارٍ دمج XS GPS',d.message,d.state==='failed'?'error':d.state==='done'?'done':'');
+ if(d.state==='failed'){sessionStorage.removeItem('xsgps-job');return;}
+ if(d.state==='done'){const a=$('download');a.href='/api/download/'+encodeURIComponent(job)+'?ticket='+encodeURIComponent(d.download_ticket);a.download=d.output_name;a.hidden=false;$('checksum').textContent='SHA-256: '+d.sha256;sessionStorage.removeItem('xsgps-job');return;}
+ }
+}
+async function execute(resume){if(busy)return;const secret=key.value.trim();if(!secret||(!resume&&!selected))return;busy=true;refresh();$('progress').hidden=false;$('download').hidden=true;$('checksum').textContent='';
+ try{if(location.protocol==='file:')throw Error('شغّل المشروع على السيرفر ثم افتح رابطه');
+ const job=resume||(await upload(selected,secret)).job;sessionStorage.setItem('xsgps-job',job);await monitor(job,secret);
+ }catch(e){show('تعذر إكمال العملية',e.message,'error');}finally{busy=false;$('progress').hidden=true;refresh();}}
+button.onclick=()=>execute(null);
+const pending=sessionStorage.getItem('xsgps-job');if(pending){show('توجد مهمة سابقة','أدخل رمز الدخول واضغط متابعة');const resume=document.createElement('button');resume.textContent='متابعة المهمة السابقة';resume.onclick=()=>{if(key.value.trim()){resume.remove();execute(pending);}else key.focus();};$('status').appendChild(resume);}
 })();
-</script>
-</body></html>
+</script></body></html>
