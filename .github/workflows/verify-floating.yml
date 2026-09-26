@@ -1,0 +1,40 @@
+name: Verify floating XS GPS inside merged APK
+on:
+  push:
+    branches: ['verify/floating-runtime']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  floating:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production library and plain Android host
+        run: |
+          docker build --target sdk -t xsgps-sdk -f builder/Dockerfile .
+          docker run --name fixture -v "$PWD/builder/tests:/tests:ro" xsgps-sdk bash -c 'cp /tests/FloatingTestHost.java /src/android/app/src/main/java/com/xsgps/android/MainActivity.java && gradle --no-daemon -p /src/android :app:assembleDebug'
+          mkdir -p fixtures
+          docker cp fixture:/src/android/app/build/outputs/apk/debug/app-debug.apk fixtures/input.apk
+          docker build -t xsgps-builder -f builder/Dockerfile .
+          docker run --rm --user root -v "$PWD/fixtures:/fixtures" xsgps-builder python cli.py /fixtures/input.apk -o /fixtures/output.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify floating control and panel on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: python3 builder/tests/verify_floating.py
+      - name: Save screenshots and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: floating-runtime-evidence
+          path: floating-evidence/
