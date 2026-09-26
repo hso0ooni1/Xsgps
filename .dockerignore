@@ -4,10 +4,8 @@
 !builder/
 !builder/**
 !android/
-!android/build.gradle
-!android/settings.gradle
-!android/gradle.properties
-!android/xsgpslib/
-!android/xsgpslib/**
+!android/**
 **/.gradle/
 **/build/
+**/__pycache__/
+**/.pytest_cache/

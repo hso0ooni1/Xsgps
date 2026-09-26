@@ -1,12 +1,40 @@
-# XsGPS APK/XAPK Builder — Railway
+# XS GPS — سكريبت دمج APK وXAPK
 
-Docker-backed builder for **owned or explicitly authorized Android Debug APK/XAPK**. The source is stored in four SHA-256-verified Brotli/base64 parts (source.part1 through source.part4); Dockerfile expands them into server.py, requirements.txt and static/index.html. A readable source ZIP is also supplied separately.
+المصدر: مكتبة `android/xsgpslib` في مستودع Xsgps نفسه. لا يلزم رفع الأداة كل مرة.
 
-- Upload APK or XAPK (450 MB configured; actual limits depend on available Railway resources and HTTP upload duration).
-- Only modifies debuggable APKs. Adds the existing Android XsGPS AAR as a DEX, starts the authorized app overlay via Application startup, and signs the output with a fresh test key.
-- XAPK repacking preserves split APK and OBB files and uses the same test key to re-sign every split. Use an XAPK installer where required.
-- Standard Android Mock Location. No integrity bypass or concealment.
-- Outputs expire after roughly an hour. Run one worker per Railway replica and don't assume persistence across restarts.
-- Set Railway BUILDER_TOKEN and enter the token in the website before uploading private apps.
-- Service Dockerfile: builder/Dockerfile. Service config: builder/railway.toml. Keep the repository root build context; Docker needs android/xsgpslib.
-- API: POST /api/build, GET /api/status/{job_id}, GET /api/download/{job_id}?ticket=..., GET /api/health.
+## التشغيل
+
+من جذر المستودع:
+
+```sh
+docker build -t xsgps-builder -f builder/Dockerfile .
+docker run --rm -p 8080:8080 -e BUILDER_PASSWORD='ضع-رمزًا-خاصًا-طويلًا' -v xsgps-signing:/data xsgps-builder
+```
+
+افتح `http://localhost:8080`، أدخل رمز الدخول، اختر APK أو XAPK، اضغط دمج، ثم نزّل الناتج.
+
+لـRailway: سياق البناء جذر المستودع، Dockerfile هو `builder/Dockerfile`، مسار الصحة `/api/health`، ومتغير `BUILDER_PASSWORD` (أو `BUILDER_TOKEN` للتوافق). استخدم HTTPS. احفظ مفتاح التوقيع في Volume عند `/data` أو زوّد `SIGNING_KEYSTORE_B64` مع `SIGNING_PASSWORD` و`SIGNING_ALIAS` الخاصة به. عند تركيب Volume فارغ تأكد أن مستخدم الحاوية يستطيع الكتابة إليه. لا ترفع مفاتيح التوقيع إلى GitHub.
+
+## سكريبت سطر الأوامر
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/files:/files" -e SIGNING_STORE=/files/signing.jks xsgps-builder python cli.py /files/input.apk -o /files/output.apk
+```
+
+نفس الأمر يقبل `.xapk`. مجلد `files` يجب أن يكون موجودًا وقابلًا للكتابة. لا يستبدل ملف إخراج موجودًا.
+
+## ماذا يفعل؟
+
+- يدمج كود XS GPS والخريطة والخدمة، ويضيف مهيئًا لتشغيل زر الأداة داخل شاشات التطبيق دون تعديل كود Activity.
+- يقبل APK العادي وXAPK الذي يحتوي base + splits، ويتحقق من الحزمة والإصدار وأسماء splits قبل إعادة توقيع الجميع بالمفتاح نفسه.
+- يحفظ ملفات OBB وباقي ملفات XAPK ويحدّث بيانات الأحجام والبصمات المعروفة في manifest.json.
+- يتأكد من توقيع الناتج ومحاذاة المكتبات. يحافظ على هوية الحزمة والإصدار، ويرفع الحد الأدنى للنظام إلى Android 8 عند الحاجة.
+- يحذف المدخلات وملفات العمل بعد كل مهمة، والناتج بعد ساعة من اكتمالها. لا تُحفظ المهام بعد إعادة تشغيل السيرفر.
+
+## حدود التشغيل
+
+الدمج بالمكتبة المضمنة AAR، وليس بموديول LSPatch التجريبي الموجود في فرع سابق. المكتبة تستخدم Android Mock Location الرسمي؛ اختر **التطبيق الناتج** في خيارات المطور ← تطبيق الموقع التجريبي. لا يلزم Root. لا يجري تجاوز فحص توقيع أو Play Integrity أو إخفاء الموقع التجريبي. بعض التطبيقات قد ترفض التوقيع الجديد أو لا تقبل الموقع التجريبي. لا يوجد ضمان للتوافق مع كل APK.
+
+التوقيع الجديد لا يحدّث التطبيق الأصلي إلا إذا استخدمت مفتاحه الأصلي الصحيح. لا تحذف التطبيق الأصلي دون نسخة احتياطية لبياناتك. قد تحتاج مُثبت XAPK لتثبيت الحزمة المقسمة؛ الناتج لا يحول XAPK إلى APK واحد.
+
+التجارب الآلية تتحقق من البناء وبنية الناتج والتوقيع؛ تجربة التشغيل داخل تطبيقك على هاتف أندرويد مطلوبة لتأكيد التوافق الفعلي.
